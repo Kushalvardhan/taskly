@@ -1,17 +1,20 @@
 package com.taskly.backend.user.dto;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
-@Getter
-@Setter
-@ToString
-public class CreateUserRequestDto {
+public record CreateUserRequestDto (
 
-    private String name;
+    @NotBlank(message = "Name is required")
+    @Size(min = 5, max = 30, message = "The length of the name should be between 5 and 100 characters")
+    String name,
 
-    private String email;
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email address must be a valid value")
+    String email,
 
-    private String passwordHash;
-}
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, max = 20, message = "Password length must be between 8 and 50 characters")
+    String password
+){}

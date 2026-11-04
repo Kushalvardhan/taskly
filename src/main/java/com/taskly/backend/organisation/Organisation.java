@@ -1,12 +1,16 @@
 package com.taskly.backend.organisation;
 
-import com.taskly.backend.user.User;
+import com.taskly.backend.user.TasklyUser;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,6 +19,7 @@ import java.time.LocalDateTime;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 public class Organisation {
 
     @Id
@@ -29,9 +34,17 @@ public class Organisation {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
-    private User createdBy;
+    private TasklyUser createdBy;
 
-    private LocalDateTime createdAt;
+    @CreatedDate
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
+    private Instant createdAt;
 
-    private LocalDateTime updatedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 }

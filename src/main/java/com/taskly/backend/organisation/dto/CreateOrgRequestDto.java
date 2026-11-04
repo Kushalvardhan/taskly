@@ -11,6 +11,4 @@ public class CreateOrgRequestDto {
     private String name;
 
     private String code;
-
-    private Long createdByUserId;
 }

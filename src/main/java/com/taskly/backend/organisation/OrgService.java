@@ -2,70 +2,89 @@ package com.taskly.backend.organisation;
 
 import com.taskly.backend.organisation.dto.CreateOrgRequestDto;
 import com.taskly.backend.organisation.dto.JoinOrgRequestDto;
-import com.taskly.backend.user.User;
-import com.taskly.backend.user.UserRepository;
+import com.taskly.backend.organisation.dto.OrgOperationResult;
+import com.taskly.backend.user.TasklyUser;
+import com.taskly.backend.user.TasklyUserRepository;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
 @Service
+@RequiredArgsConstructor
 public class OrgService {
 
     private final OrgRepository orgRepository;
-    private final UserRepository userRepository;
-
-    public OrgService(OrgRepository orgRepository, UserRepository userRepository){
-        this.orgRepository = orgRepository;
-        this.userRepository = userRepository;
-    }
+    private final TasklyUserRepository tasklyUserRepository;
 
     @Transactional
-    public Organisation registerOrg(CreateOrgRequestDto orgDto){
+    public OrgOperationResult registerOrg(CreateOrgRequestDto orgDto, String email) {
 
-        //Find user
-        User user = userRepository.findById(orgDto.getCreatedByUserId())
+        // 1. Find authenticated user
+        TasklyUser user = tasklyUserRepository
+                .findUserByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        //Create Organisation
+        // 2. Validate existing membership
+        if (user.getOrganisation() != null) {
+            throw new IllegalStateException(
+                    "User already belongs to an organisation"
+            );
+        }
+
+        // 3. Create organisation
         Organisation org = new Organisation();
 
         org.setName(orgDto.getName());
         org.setCode(orgDto.getCode());
         org.setCreatedBy(user);
 
-        //Attach Organisation to user and give the Organisation manager role
-        user.setOrganisation(org);
-        user.setOrganisationRole(OrganisationRole.ORGANISATION_MANAGER);
+        // 4. Save organisation first
+        Organisation savedOrg = orgRepository.save(org);
 
-        //Save User and Organisation
-        userRepository.save(user);
-        return orgRepository.save(org);
+        // 5. Update user's organisation and role
+        user.setOrganisation(savedOrg);
+        user.setOrganisationRole(
+                OrganisationRole.ORGANISATION_MANAGER
+        );
+
+        TasklyUser updatedUser = tasklyUserRepository.save(user);
+
+        return new OrgOperationResult(savedOrg, updatedUser);
     }
 
     @Transactional
-    public Organisation joinOrg(JoinOrgRequestDto request) {
+    public OrgOperationResult joinOrg(
+            JoinOrgRequestDto request,
+            String email
+    ) {
 
-        //Find user
-        User user = userRepository.findById(request.getId())
-                .orElseThrow(() -> new RuntimeException("User not found!"));
+        // 1. Find authenticated user
+        TasklyUser user = tasklyUserRepository
+                .findUserByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
 
-        //Validate User being part of other organization already.
-        if(user.getOrganisation() != null){
-            throw new RuntimeException("User already belongs to an organisation!");
+        // 2. Validate membership
+        if (user.getOrganisation() != null) {
+            throw new IllegalStateException(
+                    "User already belongs to an organisation"
+            );
         }
 
-        //Find Organisation
-        Organisation org = orgRepository.findByCode(request.getOrganisationCode())
-                .orElseThrow(() -> new RuntimeException("Organisation not found!"));
+        // 3. Find organisation
+        Organisation org = orgRepository
+                .findByCode(request.getOrganisationCode())
+                .orElseThrow(() ->
+                        new RuntimeException("Organisation not found")
+                );
 
-        //Attach Organisation info to user and give Employee role.
+        // 4. Update organisation and role
         user.setOrganisation(org);
         user.setOrganisationRole(OrganisationRole.EMPLOYEE);
 
-        //Save User
-        userRepository.save(user);
+        TasklyUser updatedUser = tasklyUserRepository.save(user);
 
-        return org;
+        return new OrgOperationResult(org, updatedUser);
     }
 }

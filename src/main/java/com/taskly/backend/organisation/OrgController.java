@@ -1,63 +1,90 @@
 package com.taskly.backend.organisation;
 
-import com.taskly.backend.organisation.dto.CreateOrgRequestDto;
-import com.taskly.backend.organisation.dto.CreateOrgResponseDto;
-import com.taskly.backend.organisation.dto.JoinOrgRequestDto;
-import com.taskly.backend.user.User;
-import com.taskly.backend.user.dto.CreateOrgResponseUserDto;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.Response;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import com.taskly.backend.organisation.dto.*;
+import com.taskly.backend.security.util.JwtUtil;
+import com.taskly.backend.user.TasklyUser;
 
-@Slf4j
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
 @RestController
 @RequestMapping("/api/organisation")
+@RequiredArgsConstructor
 public class OrgController {
 
     private final OrgService orgService;
+    private final JwtUtil jwtUtil;
 
-    public OrgController(OrgService orgService) {
-        this.orgService = orgService;
-    }
-
+    // CREATE ORGANISATION
     @PostMapping("/register")
-    public ResponseEntity<CreateOrgResponseDto> registerOrg(@RequestBody CreateOrgRequestDto orgDto){
-        //log.info("received Request Object : {}", orgDto);
-        Organisation registeredOrg = orgService.registerOrg(orgDto);
+    public ResponseEntity<OrgAuthResponseDto> registerOrg(
+            @RequestBody CreateOrgRequestDto request,
+            Authentication authentication
+    ) {
 
-        return ResponseEntity.ok(mapToCreateOrgResponseDto(registeredOrg));
+        OrgOperationResult result = orgService.registerOrg(
+                request,
+                authentication.getName()
+        );
+
+        return buildResponse("Organisation created successfully", result);
     }
 
+    // JOIN ORGANISATION
     @PostMapping("/join")
-    public ResponseEntity<CreateOrgResponseDto> joinOrg(@RequestBody JoinOrgRequestDto request){
-        Organisation joinedOrg = orgService.joinOrg(request);
+    public ResponseEntity<OrgAuthResponseDto> joinOrg(
+            @RequestBody JoinOrgRequestDto request,
+            Authentication authentication
+    ) {
 
-        return ResponseEntity.ok(mapToCreateOrgResponseDto(joinedOrg));
+        OrgOperationResult result = orgService.joinOrg(
+                request,
+                authentication.getName()
+        );
+
+        return buildResponse("Organisation joined successfully", result);
     }
 
-    private CreateOrgResponseDto mapToCreateOrgResponseDto(Organisation org){
+    // COMMON RESPONSE BUILDER
+    private ResponseEntity<OrgAuthResponseDto> buildResponse(String message, OrgOperationResult result) {
 
-        CreateOrgResponseDto response = new CreateOrgResponseDto();
+        Organisation org = result.organisation();
+        TasklyUser user = result.user();
 
-        response.setId(org.getId());
-        response.setName(org.getName());
-        response.setCode(org.getCode());
-        response.setCreatedAt(org.getCreatedAt());
-        response.setUpdatedAt(org.getUpdatedAt());
+        // Organisation DTO
+        OrganisationResponseDto orgDto =
+                new OrganisationResponseDto(
+                        org.getId(),
+                        org.getName(),
+                        org.getCode(),
+                        org.getCreatedBy().getId(),
+                        org.getCreatedAt(),
+                        org.getUpdatedAt()
+                );
 
-        User user = org.getCreatedBy();
-        CreateOrgResponseUserDto userDto = new CreateOrgResponseUserDto();
+        // Updated authenticated user DTO
+        OrganisationUserDto userDto =
+                new OrganisationUserDto(
+                        user.getId(),
+                        user.getName(),
+                        user.getEmail(),
+                        user.getOrganisationRole().name()
+                );
 
-        userDto.setId(user.getId());
-        userDto.setName(user.getName());
-        userDto.setEmail(user.getEmail());
-        userDto.setOrganisationRole(String.valueOf(user.getOrganisationRole()));
+        // Generate new JWT with updated role
+        String newJwtToken = jwtUtil.generateJwtToken(user);
 
-        response.setCreatedBy(userDto);
-        return response;
+        // Final response
+        OrgAuthResponseDto response =
+                new OrgAuthResponseDto(
+                        message,
+                        orgDto,
+                        userDto,
+                        newJwtToken
+                );
+
+        return ResponseEntity.ok(response);
     }
 }
