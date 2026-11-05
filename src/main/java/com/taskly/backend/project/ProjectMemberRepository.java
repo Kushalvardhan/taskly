@@ -1,6 +1,7 @@
 package com.taskly.backend.project;
 
 import com.taskly.backend.project.dto.ProjectMemberListDto;
+import com.taskly.backend.task.dto.TaskAssignmentOptionDto;
 import com.taskly.backend.user.TasklyUser;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -18,8 +19,6 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     @Query("""
         SELECT new com.taskly.backend.project.dto.ProjectMemberListDto(
-            pm.id,
-            pm.project.id,
             pm.user.id,
             pm.user.name,
             pm.user.email,
@@ -34,4 +33,24 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     );
 
     Optional<ProjectMember>findByProject_IdAndUser_Id(Long projectId, Long userId);
+
+    @Query("""
+    SELECT new com.taskly.backend.task.dto.TaskAssignmentOptionDto(
+        pm.user.id,
+        pm.user.name,
+        pm.user.email,
+        pm.projectRole,
+        CASE WHEN ta.id IS NOT NULL THEN true ELSE false END
+    )
+    FROM ProjectMember pm
+    LEFT JOIN TaskAssignee ta
+        ON ta.assignee.id = pm.user.id
+        AND ta.task.id = :taskId
+    WHERE pm.project.id = :projectId
+    ORDER BY pm.user.name
+""")
+    List<TaskAssignmentOptionDto> findTaskAssignmentOptions(
+            @Param("projectId") Long projectId,
+            @Param("taskId") Long taskId
+    );
 }

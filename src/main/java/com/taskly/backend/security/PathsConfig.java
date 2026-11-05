@@ -50,7 +50,9 @@ public class PathsConfig {
         return List.of(
                 "/api/project",
                 "/api/project/*",
-                "/api/project/*/members"
+                "/api/project/*/members",
+                "/api/project/{projectId}/task/create",
+                "/api/project/{projectId}/tasks/{taskId}/assignees/options"
         );
     }
 }
