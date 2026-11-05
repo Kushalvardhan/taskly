@@ -41,7 +41,7 @@ public class Task extends BaseEntity {
     private Instant startDate;
 
     @Column(name = "deadline")
-    private Instant deadLine;
+    private Instant deadline;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
