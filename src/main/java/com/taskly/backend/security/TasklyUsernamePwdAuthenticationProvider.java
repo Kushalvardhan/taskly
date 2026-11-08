@@ -1,5 +1,6 @@
 package com.taskly.backend.security;
 
+import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
 import org.jspecify.annotations.Nullable;
@@ -11,7 +12,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +37,7 @@ public class TasklyUsernamePwdAuthenticationProvider implements AuthenticationPr
         String pwd = credentials.toString();
 
         TasklyUser tasklyUser = tasklyUserRepository.findUserByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "User details not found for the user: " + username));
 
         List<SimpleGrantedAuthority> authorities =

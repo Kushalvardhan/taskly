@@ -3,10 +3,7 @@ package com.taskly.backend.task;
 import com.taskly.backend.constants.BaseEntity;
 import com.taskly.backend.user.TasklyUser;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Entity
 @Table(
@@ -23,6 +20,10 @@ import lombok.Setter;
 @Getter
 @Setter
 public class TaskAssignee extends BaseEntity {
+
+    public TaskAssignee(Task task, TasklyUser user) {
+        super();
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

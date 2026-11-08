@@ -2,13 +2,15 @@ package com.taskly.backend.task;
 
 import com.taskly.backend.task.dto.CreateTaskRequestDto;
 import com.taskly.backend.task.dto.CreateTaskResponseDto;
-import com.taskly.backend.task.dto.GetTaskAssignmentOptionsResponse;
+import com.taskly.backend.task.dto.GetTaskAssignmentStatusResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/project")
@@ -33,16 +35,31 @@ public class TaskController {
     }
 
     @GetMapping("/{projectId}/tasks/{taskId}/assignees/options")
-    public ResponseEntity<?> getTaskAssignmentOptions(
+    public ResponseEntity<GetTaskAssignmentStatusResponse> getTaskAssignmentOptions(
             Authentication authentication,
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ){
         String email = authentication.getName();
 
-        GetTaskAssignmentOptionsResponse response =
+        GetTaskAssignmentStatusResponse response =
                 taskService.getTaskAssignmentOptions(email, projectId, taskId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{projectId}/tasks/{taskId}/assignees")
+    public ResponseEntity<?> taskAssignment(
+            Authentication authentication,
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @RequestBody List<Long> userIds
+    ) {
+        String email = authentication.getName();
+
+        GetTaskAssignmentStatusResponse response =
+                taskService.taskAssignment(email, projectId, taskId, userIds);
+
+        return(null);
     }
 }

@@ -1,18 +1,20 @@
 package com.taskly.backend.task;
 
-import com.taskly.backend.organisation.OrganisationRole;
+import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.project.*;
 import com.taskly.backend.task.dto.*;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import com.taskly.backend.exception.BadRequestException;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,13 +31,13 @@ public class TaskService {
         // 1. Find User
         TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("User not found")
+                        new ResourceNotFoundException("User not found")
                 );
 
         // 2. Fetch the project
         OrgProject project = projectRepository.findById(projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found")
+                        new ResourceNotFoundException("Project not found")
                 );
 
         // 3. Verify that the user belongs to an organisation
@@ -115,19 +117,19 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true)
-    public GetTaskAssignmentOptionsResponse getTaskAssignmentOptions(
+    public GetTaskAssignmentStatusResponse getTaskAssignmentOptions(
             String email, Long projectId, Long taskId
     ) {
         // 1. Fetch the authenticated user
         TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException("User not found")
+                        new ResourceNotFoundException("User not found")
                 );
 
         // 2. Fetch the project
         OrgProject project = projectRepository.findById(projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found")
+                        new ResourceNotFoundException("Project not found")
                 );
 
         // 3. Verify that the user belongs to the project's organisation
@@ -162,21 +164,163 @@ public class TaskService {
         // 6. Verify that the task belongs to the requested project
         Task task = taskRepository.findByIdAndProject_Id(taskId, projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException(
+                        new ResourceNotFoundException(
                                 "Task not found in this project"
                         )
                 );
 
         // 7. Retrieve project members with their assignment status
-        List<TaskAssignmentOptionDto> team =
+        List<TaskAssignmentStatusDto> team =
                 projectMemberRepository.findTaskAssignmentOptions(
                         projectId,
                         taskId
                 );
 
         // 8. Return the response
-        return new GetTaskAssignmentOptionsResponse(
+        return new GetTaskAssignmentStatusResponse(
                 "Task assignment options retrieved successfully",
+                team
+        );
+    }
+
+    @Transactional
+    public GetTaskAssignmentStatusResponse taskAssignment(
+            String email, Long projectId, Long taskId, List<Long> assigneeIds
+    ) {
+
+        // Validate Request
+        if (assigneeIds == null || assigneeIds.isEmpty()) {
+            throw new BadRequestException(
+                    "At least one assignee must be selected"
+            );
+        }
+
+        // Reject duplicate IDs
+        Set<Long> requestedIds = new HashSet<>(assigneeIds);
+
+        if (requestedIds.size() != assigneeIds.size()) {
+            throw new BadRequestException(
+                    "Duplicate assignee IDs are not allowed"
+            );
+        }
+
+        // 1. Fetch the authenticated user
+        TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found")
+                );
+
+        // 2. Fetch the project
+        OrgProject project = projectRepository.findById(projectId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Project not found")
+                );
+
+        // 3. Verify that the user belongs to the project's organisation
+        if (currentUser.getOrganisation() == null ||
+                !project.getOrganisation().getId()
+                        .equals(currentUser.getOrganisation().getId())) {
+
+            throw new AccessDeniedException(
+                    "You do not have access to this project"
+            );
+        }
+
+        // 4. Verify that the current user is a member of this project
+        ProjectMember currentMembership =
+                projectMemberRepository.findByProject_IdAndUser_Id(
+                                projectId,
+                                currentUser.getId()
+                        )
+                        .orElseThrow(() ->
+                                new AccessDeniedException(
+                                        "You are not a member of this project"
+                                )
+                        );
+
+        // 5. Only Project Managers can perform task assignment
+        if (currentMembership.getProjectRole() != ProjectRole.PROJECT_MANAGER) {
+            throw new AccessDeniedException(
+                    "Only Project Managers can perform task assignment"
+            );
+        }
+
+        // 6. Verify that the task belongs to the requested project
+        Task task = taskRepository.findByIdAndProject_Id(taskId, projectId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Task not found in this project"
+                        )
+                );
+
+        //Now security checks for the ids in assigneeIds list.
+        // 7. Verify all requested users exist
+        List<TasklyUser> users =
+                tasklyUserRepository.findAllById(requestedIds);
+
+        Set<Long> existingUserIds = users.stream()
+                .map(TasklyUser::getId)
+                .collect(Collectors.toSet());
+
+        if (!existingUserIds.equals(requestedIds)) {
+
+            Set<Long> invalidUserIds = new HashSet<>(requestedIds);
+            invalidUserIds.removeAll(existingUserIds);
+
+            throw new BadRequestException(
+                    "Invalid user IDs: " + invalidUserIds
+            );
+        }
+
+        // 7. Verify all requested users belong to this project
+        Set<Long> projectMemberIds =
+                projectMemberRepository.findMemberUserIds(
+                        projectId,
+                        requestedIds
+                );
+
+        if (!projectMemberIds.equals(requestedIds)) {
+
+            Set<Long> nonMemberIds = new HashSet<>(requestedIds);
+            nonMemberIds.removeAll(projectMemberIds);
+
+            throw new BadRequestException(
+                    "The following users are not members of this project: "
+                            + nonMemberIds
+            );
+        }
+
+        // 8. Check for existing assignments
+        Set<Long> alreadyAssignedIds =
+                taskAssigneeRepository.findAlreadyAssignedUserIds(
+                        taskId,
+                        requestedIds
+                );
+
+        if (!alreadyAssignedIds.isEmpty()) {
+            throw new BadRequestException(
+                    "The following users are already assigned: "
+                            + alreadyAssignedIds
+            );
+        }
+
+        // 9. All validations passed. Create assignments.
+        List<TaskAssignee> taskAssignees = users.stream()
+                .map(user -> new TaskAssignee(task, user))
+                .toList();
+
+        taskAssigneeRepository.saveAll(taskAssignees);
+
+        // 10. Fetch updated assignment options
+        List<TaskAssignmentStatusDto> team =
+                projectMemberRepository.findTaskAssignmentOptions(
+                        projectId,
+                        taskId
+                );
+
+        // 11. Return response
+        return new GetTaskAssignmentStatusResponse(
+                "Task assignees assigned successfully",
                 team
         );
     }

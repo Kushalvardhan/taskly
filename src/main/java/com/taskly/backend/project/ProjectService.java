@@ -1,20 +1,18 @@
 package com.taskly.backend.project;
 
+import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.organisation.Organisation;
 import com.taskly.backend.organisation.OrganisationRole;
 import com.taskly.backend.project.dto.*;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -30,7 +28,7 @@ public class ProjectService {
 
         // 1. Identify authenticated user
         TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found!"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
 
         // 2. Verify organisation membership
         if (user.getOrganisation() == null) {
@@ -55,7 +53,7 @@ public class ProjectService {
 
         //find authenticated user
         TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found!"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
 
         //Verify Manager role
         if(user.getOrganisationRole() != OrganisationRole.ORGANISATION_MANAGER) {
@@ -68,7 +66,7 @@ public class ProjectService {
         Organisation organisation = user.getOrganisation();
 
         if(organisation == null){
-            throw new IllegalStateException(
+            throw new AccessDeniedException(
                     "User does not belong to an organisation!"
             );
         }
@@ -101,13 +99,13 @@ public class ProjectService {
         // 1. Find User
         TasklyUser user = tasklyUserRepository.findUserByEmail(email)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("User not found")
+                        new ResourceNotFoundException("User not found")
                 );
 
         // 2. Fetch the project
         OrgProject project = projectRepository.findById(projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found")
+                        new ResourceNotFoundException("Project not found")
                 );
 
         // 3. Verify that the user belongs to an organisation
@@ -161,7 +159,7 @@ public class ProjectService {
         // 1. Find the user
         TasklyUser user = tasklyUserRepository.findUserByEmail(email)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("User not found")
+                        new ResourceNotFoundException("User not found")
                 );
 
         // 2. Verify that the user belongs to an organisation
@@ -174,7 +172,7 @@ public class ProjectService {
         // 3. Fetch the project
         OrgProject project = projectRepository.findById(projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found")
+                        new ResourceNotFoundException("Project not found")
                 );
 
         // 4. Verify that the project belongs to the user's organisation
@@ -202,13 +200,13 @@ public class ProjectService {
         // 1. Find User
         TasklyUser user = tasklyUserRepository.findUserByEmail(email)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("User not found")
+                        new ResourceNotFoundException("User not found")
                 );
 
         // 2. Fetch the project
         OrgProject project = projectRepository.findById(projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found")
+                        new ResourceNotFoundException("Project not found")
                 );
 
         // 3. Verify that the user belongs to an organisation
@@ -240,13 +238,13 @@ public class ProjectService {
         // 1. Find User
         TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("User not found")
+                        new ResourceNotFoundException("User not found")
                 );
 
         // 2. Fetch the project
         OrgProject project = projectRepository.findById(projectId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Project not found")
+                        new ResourceNotFoundException("Project not found")
                 );
 
         // 3. Verify organisation membership
@@ -274,7 +272,7 @@ public class ProjectService {
                         projectId,
                         userId
                 ).orElseThrow(() ->
-                        new EntityNotFoundException(
+                        new ResourceNotFoundException(
                                 "The specified user is not a member of this project"
                         )
                 );
