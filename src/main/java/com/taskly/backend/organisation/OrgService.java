@@ -1,5 +1,7 @@
 package com.taskly.backend.organisation;
 
+import com.taskly.backend.access.OrgAccessService;
+import com.taskly.backend.access.UserAccessService;
 import com.taskly.backend.organisation.dto.CreateOrgRequestDto;
 import com.taskly.backend.organisation.dto.JoinOrgRequestDto;
 import com.taskly.backend.organisation.dto.OrgOperationResult;
@@ -15,21 +17,17 @@ public class OrgService {
 
     private final OrgRepository orgRepository;
     private final TasklyUserRepository tasklyUserRepository;
+    private final UserAccessService userAccessService;
+    private final OrgAccessService orgAccessService;
 
     @Transactional
     public OrgOperationResult registerOrg(CreateOrgRequestDto orgDto, String email) {
 
         // 1. Find authenticated user
-        TasklyUser user = tasklyUserRepository
-                .findUserByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 2. Validate existing membership
-        if (user.getOrganisation() != null) {
-            throw new IllegalStateException(
-                    "User already belongs to an organisation"
-            );
-        }
+        // 2. Verify user has no existing organisation
+        orgAccessService.verifyUserHasNoOrganisation(user);
 
         // 3. Create organisation
         Organisation org = new Organisation();
@@ -38,7 +36,7 @@ public class OrgService {
         org.setCode(orgDto.getCode());
         org.setCreatedBy(user);
 
-        // 4. Save organisation first
+        // 4. Save organisation
         Organisation savedOrg = orgRepository.save(org);
 
         // 5. Update user's organisation and role
@@ -59,29 +57,21 @@ public class OrgService {
     ) {
 
         // 1. Find authenticated user
-        TasklyUser user = tasklyUserRepository
-                .findUserByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found")
-                );
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 2. Validate membership
-        if (user.getOrganisation() != null) {
-            throw new IllegalStateException(
-                    "User already belongs to an organisation"
-            );
-        }
+        // 2. Verify user has no existing organisation
+        orgAccessService.verifyUserHasNoOrganisation(user);
 
         // 3. Find organisation
-        Organisation org = orgRepository
-                .findByCode(request.getOrganisationCode())
-                .orElseThrow(() ->
-                        new RuntimeException("Organisation not found")
+        Organisation org =
+                orgAccessService.getOrganisationByCode(
+                        request.getOrganisationCode()
                 );
 
-        // 4. Update organisation and role
+        // 4. Update user's organisation and role
         user.setOrganisation(org);
         user.setOrganisationRole(OrganisationRole.EMPLOYEE);
+
 
         TasklyUser updatedUser = tasklyUserRepository.save(user);
 
