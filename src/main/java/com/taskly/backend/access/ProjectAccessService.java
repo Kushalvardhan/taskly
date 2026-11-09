@@ -3,7 +3,8 @@ package com.taskly.backend.access;
 import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.organisation.Organisation;
 import com.taskly.backend.organisation.OrganisationRole;
-import com.taskly.backend.project.*;
+import com.taskly.backend.project.OrgProject;
+import com.taskly.backend.project.ProjectRepository;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ProjectAccessService {
+
     private final ProjectRepository projectRepository;
     private final TasklyUserRepository tasklyUserRepository;
 
