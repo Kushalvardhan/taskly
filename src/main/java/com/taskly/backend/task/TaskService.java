@@ -1,13 +1,14 @@
 package com.taskly.backend.task;
 
-import com.taskly.backend.exception.ResourceNotFoundException;
+import com.taskly.backend.access.ProjectAccessService;
+import com.taskly.backend.access.TaskAccessService;
+import com.taskly.backend.access.UserAccessService;
 import com.taskly.backend.project.*;
 import com.taskly.backend.task.dto.*;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
 import lombok.RequiredArgsConstructor;
 import com.taskly.backend.exception.BadRequestException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,51 +23,38 @@ public class TaskService {
     
     private final TaskRepository taskRepository;
     private final TasklyUserRepository tasklyUserRepository;
-    private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final TaskAssigneeRepository taskAssigneeRepository;
 
+    private final UserAccessService userAccessService;
+    private final ProjectAccessService projectAccessService;
+    private final TaskAccessService taskAccessService;
+
     @Transactional
     public CreateTaskResponseDto createTask(String email, Long projectId, CreateTaskRequestDto request) {
-        // 1. Find User
-        TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
+        // Find authenticated user
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
+
+        // Verify project access
+        OrgProject project =
+                projectAccessService.getProjectForUser(
+                        projectId,
+                        currentUser
                 );
 
-        // 2. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
+        // Verify project membership
+        ProjectMember membership =
+                projectAccessService.getProjectMembership(
+                        projectId,
+                        currentUser.getId()
                 );
 
-        // 3. Verify that the user belongs to an organisation
-        if (currentUser.getOrganisation() == null) {
-            throw new AccessDeniedException(
-                    "You must belong to an organisation to create tasks"
-            );
-        }
+        ProjectRole role = membership.getProjectRole();
 
-        // 4. Verify that the project belongs to the user's organisation
-        if (!project.getOrganisation().getId()
-                .equals(currentUser.getOrganisation().getId())) {
-
-            throw new AccessDeniedException(
-                    "You cannot create task in a project outside your organisation"
-            );
-        }
-
-        // 5. Verify User is part of the project and get his project role
-        ProjectMember projectMember = projectMemberRepository
-                .findByProject_IdAndUser_Id(projectId, currentUser.getId())
-                .orElseThrow(() -> new AccessDeniedException(
-                        "You are not a member of this project"
-                ));
-
-        ProjectRole role = projectMember.getProjectRole();
-
-        // 6. Create new task
+        // Create task
         Task task = new Task();
+
         task.setProject(project);
         task.setCreator(currentUser);
         task.setTitle(request.title());
@@ -78,23 +66,29 @@ public class TaskService {
         task.setStatus(TaskStatus.TODO);
 
         Task savedTask = taskRepository.save(task);
+
         TaskAssignee savedAssignee = null;
         String message = "Task created successfully";
 
-        // 6. check for user's self assignment
-        if(role == ProjectRole.MEMBER){
+        // Automatically assign the creator if they are a MEMBER
+        if (role == ProjectRole.MEMBER) {
+
             TaskAssignee taskAssignee = new TaskAssignee();
+
             taskAssignee.setTask(savedTask);
             taskAssignee.setAssignee(currentUser);
             taskAssignee.setStatus(TaskStatus.TODO);
 
-            savedAssignee = taskAssigneeRepository.save(taskAssignee);
+            savedAssignee =
+                    taskAssigneeRepository.save(taskAssignee);
+
             message = "Task created with successful self assignment";
-        };
+        }
 
-        Long assigneeId = savedAssignee != null ? savedAssignee.getAssignee().getId() : null;
+        Long assigneeId = savedAssignee != null
+                ? savedAssignee.getAssignee().getId()
+                : null;
 
-        // Create dto
         TaskResponseDto response = new TaskResponseDto(
                 savedTask.getId(),
                 savedTask.getProject().getId(),
@@ -110,73 +104,42 @@ public class TaskService {
                 savedTask.getCreatedAt()
         );
 
-        return new CreateTaskResponseDto(
-                message,
-                response
-        );
+        return new CreateTaskResponseDto(message, response);
     }
 
     @Transactional(readOnly = true)
     public GetTaskAssignmentStatusResponse getTaskAssignmentOptions(
             String email, Long projectId, Long taskId
     ) {
-        // 1. Fetch the authenticated user
-        TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
+        // Find authenticated user
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
 
-        // 2. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
-                );
+        // Verify project access
+        projectAccessService.getProjectForUser(
+                projectId,
+                currentUser
+        );
 
-        // 3. Verify that the user belongs to the project's organisation
-        if (currentUser.getOrganisation() == null ||
-                !project.getOrganisation().getId()
-                        .equals(currentUser.getOrganisation().getId())) {
+        // Verify Project Manager role
+        projectAccessService.verifyProjectManager(
+                projectId,
+                currentUser.getId()
+        );
 
-            throw new AccessDeniedException(
-                    "You do not have access to this project"
-            );
-        }
+        // Verify task belongs to the requested project
+        taskAccessService.getTaskByIdAndProjectId(
+                taskId,
+                projectId
+        );
 
-        // 4. Verify that the current user is a member of this project
-        ProjectMember currentMembership =
-                projectMemberRepository.findByProject_IdAndUser_Id(
-                                projectId,
-                                currentUser.getId()
-                        )
-                        .orElseThrow(() ->
-                                new AccessDeniedException(
-                                        "You are not a member of this project"
-                                )
-                        );
-
-        // 5. Only Project Managers can view assignment options
-        if (currentMembership.getProjectRole() != ProjectRole.PROJECT_MANAGER) {
-            throw new AccessDeniedException(
-                    "Only Project Managers can view task assignment options"
-            );
-        }
-
-        // 6. Verify that the task belongs to the requested project
-        Task task = taskRepository.findByIdAndProject_Id(taskId, projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Task not found in this project"
-                        )
-                );
-
-        // 7. Retrieve project members with their assignment status
+        // Retrieve project members with their assignment status
         List<TaskAssignmentStatusDto> team =
                 projectMemberRepository.findTaskAssignmentOptions(
                         projectId,
                         taskId
                 );
 
-        // 8. Return the response
         return new GetTaskAssignmentStatusResponse(
                 "Task assignment options retrieved successfully",
                 team
@@ -188,7 +151,30 @@ public class TaskService {
             String email, Long projectId, Long taskId, List<Long> assigneeIds
     ) {
 
-        // Validate Request
+        // Find authenticated user
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
+
+        // Verify project access
+        projectAccessService.getProjectForUser(
+                projectId,
+                currentUser
+        );
+
+        // Verify Project Manager role
+        projectAccessService.verifyProjectManager(
+                projectId,
+                currentUser.getId()
+        );
+
+        // Verify task belongs to the requested project
+        Task task =
+                taskAccessService.getTaskByIdAndProjectId(
+                        taskId,
+                        projectId
+                );
+
+        // Validate request
         if (assigneeIds == null || assigneeIds.isEmpty()) {
             throw new BadRequestException(
                     "At least one assignee must be selected"
@@ -204,57 +190,7 @@ public class TaskService {
             );
         }
 
-        // 1. Fetch the authenticated user
-        TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
-
-        // 2. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
-                );
-
-        // 3. Verify that the user belongs to the project's organisation
-        if (currentUser.getOrganisation() == null ||
-                !project.getOrganisation().getId()
-                        .equals(currentUser.getOrganisation().getId())) {
-
-            throw new AccessDeniedException(
-                    "You do not have access to this project"
-            );
-        }
-
-        // 4. Verify that the current user is a member of this project
-        ProjectMember currentMembership =
-                projectMemberRepository.findByProject_IdAndUser_Id(
-                                projectId,
-                                currentUser.getId()
-                        )
-                        .orElseThrow(() ->
-                                new AccessDeniedException(
-                                        "You are not a member of this project"
-                                )
-                        );
-
-        // 5. Only Project Managers can perform task assignment
-        if (currentMembership.getProjectRole() != ProjectRole.PROJECT_MANAGER) {
-            throw new AccessDeniedException(
-                    "Only Project Managers can perform task assignment"
-            );
-        }
-
-        // 6. Verify that the task belongs to the requested project
-        Task task = taskRepository.findByIdAndProject_Id(taskId, projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Task not found in this project"
-                        )
-                );
-
-        //Now security checks for the ids in assigneeIds list.
-        // 7. Verify all requested users exist
+        // Verify all requested users exist
         List<TasklyUser> users =
                 tasklyUserRepository.findAllById(requestedIds);
 
@@ -272,7 +208,7 @@ public class TaskService {
             );
         }
 
-        // 7. Verify all requested users belong to this project
+        // Verify all requested users belong to this project
         Set<Long> projectMemberIds =
                 projectMemberRepository.findMemberUserIds(
                         projectId,
@@ -290,7 +226,7 @@ public class TaskService {
             );
         }
 
-        // 8. Check for existing assignments
+        // Check for existing assignments
         Set<Long> alreadyAssignedIds =
                 taskAssigneeRepository.findAlreadyAssignedUserIds(
                         taskId,
@@ -304,21 +240,20 @@ public class TaskService {
             );
         }
 
-        // 9. All validations passed. Create assignments.
+        // Create assignments
         List<TaskAssignee> taskAssignees = users.stream()
                 .map(user -> new TaskAssignee(task, user))
                 .toList();
 
         taskAssigneeRepository.saveAll(taskAssignees);
 
-        // 10. Fetch updated assignment options
+        // Fetch updated assignment options
         List<TaskAssignmentStatusDto> team =
                 projectMemberRepository.findTaskAssignmentOptions(
                         projectId,
                         taskId
                 );
 
-        // 11. Return response
         return new GetTaskAssignmentStatusResponse(
                 "Task assignees assigned successfully",
                 team

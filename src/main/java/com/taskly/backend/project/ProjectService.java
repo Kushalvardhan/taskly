@@ -1,14 +1,14 @@
 package com.taskly.backend.project;
 
+import com.taskly.backend.access.OrgAccessService;
+import com.taskly.backend.access.ProjectAccessService;
+import com.taskly.backend.access.UserAccessService;
 import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.organisation.Organisation;
-import com.taskly.backend.organisation.OrganisationRole;
 import com.taskly.backend.project.dto.*;
 import com.taskly.backend.user.TasklyUser;
-import com.taskly.backend.user.TasklyUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,28 +21,20 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
-    private final TasklyUserRepository tasklyUserRepository;
+
+    private final ProjectAccessService projectAccessService;
+    private final UserAccessService userAccessService;
+    private final OrgAccessService orgAccessService;
 
     @Transactional(readOnly = true)
     public List<ProjectListDto> getAllProjects(String email) {
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 1. Identify authenticated user
-        TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
+        Organisation organisation =
+                orgAccessService.getUserOrganisation(user);
 
-        // 2. Verify organisation membership
-        if (user.getOrganisation() == null) {
-            throw new AccessDeniedException(
-                    "You do not belong to any organisation"
-            );
-        }
-
-        // 3. Get organisation ID
-        Long organisationId = user.getOrganisation().getId();
-
-        // 4. Fetch project summaries
         return projectRepository.findProjectSummaries(
-                organisationId,
+                organisation.getId(),
                 user.getId()
         );
     }
@@ -51,27 +43,13 @@ public class ProjectService {
     @Transactional
     public OrgProject createProject(CreateProjReqDto request, String email) {
 
-        //find authenticated user
-        TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        //Verify Manager role
-        if(user.getOrganisationRole() != OrganisationRole.ORGANISATION_MANAGER) {
-            throw new AccessDeniedException(
-                    "Only organisation managers can create projects!"
-            );
-        }
+        orgAccessService.verifyOrganisationManager(user);
 
-        //verify organisation
-        Organisation organisation = user.getOrganisation();
+        Organisation organisation =
+                orgAccessService.getUserOrganisation(user);
 
-        if(organisation == null){
-            throw new AccessDeniedException(
-                    "User does not belong to an organisation!"
-            );
-        }
-
-        //create project
         OrgProject project = new OrgProject();
 
         project.setName(request.name());
@@ -80,7 +58,7 @@ public class ProjectService {
 
         OrgProject savedProject = projectRepository.save(project);
 
-        //Add creator as project manager
+        // Add creator as project manager
         ProjectMember member = new ProjectMember();
 
         member.setProject(savedProject);
@@ -90,41 +68,16 @@ public class ProjectService {
         projectMemberRepository.save(member);
 
         return savedProject;
-
     }
 
     //Join Project
     @Transactional
     public ProjectMemberDto joinProject(String email, Long projectId) {
-        // 1. Find User
-        TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 2. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
-                );
+        OrgProject project =
+                projectAccessService.getProjectForUser(projectId, user);
 
-        // 3. Verify that the user belongs to an organisation
-        if (user.getOrganisation() == null) {
-            throw new AccessDeniedException(
-                    "You must belong to an organisation to join a project"
-            );
-        }
-
-        // 4. Verify that the project belongs to the user's organisation
-        if (!project.getOrganisation().getId()
-                .equals(user.getOrganisation().getId())) {
-
-            throw new AccessDeniedException(
-                    "You cannot join a project outside your organisation"
-            );
-        }
-
-        // 5. Check whether the user is already a project member
         boolean alreadyJoined =
                 projectMemberRepository.existsByProjectAndUser(project, user);
 
@@ -135,14 +88,14 @@ public class ProjectService {
             );
         }
 
-        // 6. Create project membership
         ProjectMember projectMember = new ProjectMember();
 
         projectMember.setProject(project);
         projectMember.setUser(user);
         projectMember.setProjectRole(ProjectRole.MEMBER);
 
-        ProjectMember savedMember = projectMemberRepository.save(projectMember);
+        ProjectMember savedMember =
+                projectMemberRepository.save(projectMember);
 
         return new ProjectMemberDto(
                 savedMember.getId(),
@@ -156,35 +109,11 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public ViewProjectDto getProject(String email, Long projectId) {
 
-        // 1. Find the user
-        TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 2. Verify that the user belongs to an organisation
-        if (user.getOrganisation() == null) {
-            throw new AccessDeniedException(
-                    "You must belong to an organisation to join a project"
-            );
-        }
+        OrgProject project =
+                projectAccessService.getProjectForUser(projectId, user);
 
-        // 3. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
-                );
-
-        // 4. Verify that the project belongs to the user's organisation
-        if (!project.getOrganisation().getId()
-                .equals(user.getOrganisation().getId())) {
-
-            throw new AccessDeniedException(
-                    "You cannot access a project outside your organisation"
-            );
-        }
-
-        // 6. Prepare DTO
         return new ViewProjectDto(
                 project.getId(),
                 project.getName(),
@@ -197,33 +126,9 @@ public class ProjectService {
 
     @Transactional
     public List<ProjectMemberListDto> getMembers(String email, Long projectId){
-        // 1. Find User
-        TasklyUser user = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 2. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
-                );
-
-        // 3. Verify that the user belongs to an organisation
-        if (user.getOrganisation() == null) {
-            throw new AccessDeniedException(
-                    "You must belong to an organisation to join a project"
-            );
-        }
-
-        // 4. Verify that the project belongs to the user's organisation
-        if (!project.getOrganisation().getId()
-                .equals(user.getOrganisation().getId())) {
-
-            throw new AccessDeniedException(
-                    "You cannot view a project outside your organisation"
-            );
-        }
+        projectAccessService.getProjectForUser(projectId, user);
 
         return projectMemberRepository.findProjectMembers(projectId);
     }
@@ -235,38 +140,13 @@ public class ProjectService {
             Long userId,
             UpdateProjectRoleRequestDto request) {
 
-        // 1. Find User
-        TasklyUser currentUser = tasklyUserRepository.findUserByEmail(email)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found")
-                );
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
 
-        // 2. Fetch the project
-        OrgProject project = projectRepository.findById(projectId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Project not found")
-                );
+        projectAccessService.getProjectForUser(projectId, currentUser);
 
-        // 3. Verify organisation membership
-        if (currentUser.getOrganisation() == null ||
-                !project.getOrganisation().getId()
-                        .equals(currentUser.getOrganisation().getId())) {
+        orgAccessService.verifyOrganisationManager(currentUser);
 
-            throw new AccessDeniedException(
-                    "You cannot manage members of a project outside your organisation"
-            );
-        }
-
-        // 4. Verify organisation manager role
-        if (currentUser.getOrganisationRole()
-                != OrganisationRole.ORGANISATION_MANAGER) {
-
-            throw new AccessDeniedException(
-                    "Only organisation managers can change project roles"
-            );
-        }
-
-        // 5. Find the target user's project membership
         ProjectMember targetMembership =
                 projectMemberRepository.findByProject_IdAndUser_Id(
                         projectId,
@@ -280,7 +160,6 @@ public class ProjectService {
         ProjectRole currentRole = targetMembership.getProjectRole();
         ProjectRole requestedRole = request.role();
 
-        // 6. Check whether the role actually needs to change
         if (currentRole == requestedRole) {
             return new UpdateProjectRoleResponseDto(
                     "User already has the requested project role",
@@ -290,7 +169,6 @@ public class ProjectService {
             );
         }
 
-        // 7. Update the role
         targetMembership.setProjectRole(requestedRole);
 
         return new UpdateProjectRoleResponseDto(
