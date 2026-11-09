@@ -1,15 +1,14 @@
 package com.taskly.backend.project;
 
+import com.taskly.backend.access.OrgAccessService;
 import com.taskly.backend.access.ProjectAccessService;
+import com.taskly.backend.access.UserAccessService;
 import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.organisation.Organisation;
-import com.taskly.backend.organisation.OrganisationRole;
 import com.taskly.backend.project.dto.*;
 import com.taskly.backend.user.TasklyUser;
-import com.taskly.backend.user.TasklyUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,15 +21,16 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
-    private final TasklyUserRepository tasklyUserRepository;
     private final ProjectAccessService projectAccessService;
+    private final UserAccessService userAccessService;
+    private final OrgAccessService orgAccessService;
 
     @Transactional(readOnly = true)
     public List<ProjectListDto> getAllProjects(String email) {
-        TasklyUser user = projectAccessService.getUserByEmail(email);
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
         Organisation organisation =
-                projectAccessService.getUserOrganisation(user);
+                orgAccessService.getUserOrganisation(user);
 
         return projectRepository.findProjectSummaries(
                 organisation.getId(),
@@ -42,12 +42,12 @@ public class ProjectService {
     @Transactional
     public OrgProject createProject(CreateProjReqDto request, String email) {
 
-        TasklyUser user = projectAccessService.getUserByEmail(email);
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
-        projectAccessService.verifyOrganisationManager(user);
+        orgAccessService.verifyOrganisationManager(user);
 
         Organisation organisation =
-                projectAccessService.getUserOrganisation(user);
+                orgAccessService.getUserOrganisation(user);
 
         OrgProject project = new OrgProject();
 
@@ -72,7 +72,7 @@ public class ProjectService {
     //Join Project
     @Transactional
     public ProjectMemberDto joinProject(String email, Long projectId) {
-        TasklyUser user = projectAccessService.getUserByEmail(email);
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
         OrgProject project =
                 projectAccessService.getProjectForUser(projectId, user);
@@ -108,7 +108,7 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public ViewProjectDto getProject(String email, Long projectId) {
 
-        TasklyUser user = projectAccessService.getUserByEmail(email);
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
         OrgProject project =
                 projectAccessService.getProjectForUser(projectId, user);
@@ -125,7 +125,7 @@ public class ProjectService {
 
     @Transactional
     public List<ProjectMemberListDto> getMembers(String email, Long projectId){
-        TasklyUser user = projectAccessService.getUserByEmail(email);
+        TasklyUser user = userAccessService.getUserByEmail(email);
 
         projectAccessService.getProjectForUser(projectId, user);
 
@@ -140,12 +140,11 @@ public class ProjectService {
             UpdateProjectRoleRequestDto request) {
 
         TasklyUser currentUser =
-                projectAccessService.getUserByEmail(email);
+                userAccessService.getUserByEmail(email);
 
-        OrgProject project =
-                projectAccessService.getProjectForUser(projectId, currentUser);
+        projectAccessService.getProjectForUser(projectId, currentUser);
 
-        projectAccessService.verifyOrganisationManager(currentUser);
+        orgAccessService.verifyOrganisationManager(currentUser);
 
         ProjectMember targetMembership =
                 projectMemberRepository.findByProject_IdAndUser_Id(

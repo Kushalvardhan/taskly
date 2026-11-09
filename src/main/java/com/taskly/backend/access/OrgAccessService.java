@@ -3,6 +3,7 @@ package com.taskly.backend.access;
 import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.organisation.Organisation;
 import com.taskly.backend.organisation.OrgRepository;
+import com.taskly.backend.organisation.OrganisationRole;
 import com.taskly.backend.user.TasklyUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -54,5 +55,17 @@ public class OrgAccessService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Organisation not found")
                 );
+    }
+
+    // Verify organisation manager
+    public void verifyOrganisationManager(TasklyUser user) {
+
+        if (user.getOrganisationRole()
+                != OrganisationRole.ORGANISATION_MANAGER) {
+
+            throw new AccessDeniedException(
+                    "Only organisation managers can perform this action"
+            );
+        }
     }
 }
