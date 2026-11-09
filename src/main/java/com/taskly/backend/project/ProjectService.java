@@ -21,6 +21,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+
     private final ProjectAccessService projectAccessService;
     private final UserAccessService userAccessService;
     private final OrgAccessService orgAccessService;
