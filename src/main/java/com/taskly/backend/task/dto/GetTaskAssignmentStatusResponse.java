@@ -2,8 +2,8 @@ package com.taskly.backend.task.dto;
 
 import java.util.List;
 
-public record GetTaskAssignmentOptionsResponse(
+public record GetTaskAssignmentStatusResponse(
         String message,
-        List<TaskAssignmentOptionDto> team
+        List<TaskAssignmentStatusDto> team
 ) {
 }

@@ -1,7 +1,22 @@
 package com.taskly.backend.task;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Collection;
+import java.util.Set;
 
 public interface TaskAssigneeRepository extends JpaRepository<TaskAssignee, Long> {
 
+    @Query("""
+        SELECT ta.user.id
+        FROM TaskAssignee ta
+        WHERE ta.task.id = :taskId
+        AND ta.user.id IN :userIds
+        """)
+    Set<Long> findAlreadyAssignedUserIds(
+            @Param("taskId") Long taskId,
+            @Param("userIds") Collection<Long> userIds
+    );
 }
