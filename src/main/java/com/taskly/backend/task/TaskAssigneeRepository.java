@@ -10,10 +10,10 @@ import java.util.Set;
 public interface TaskAssigneeRepository extends JpaRepository<TaskAssignee, Long> {
 
     @Query("""
-        SELECT ta.user.id
+        SELECT ta.assignee.id
         FROM TaskAssignee ta
         WHERE ta.task.id = :taskId
-        AND ta.user.id IN :userIds
+        AND ta.assignee.id IN :userIds
         """)
     Set<Long> findAlreadyAssignedUserIds(
             @Param("taskId") Long taskId,

@@ -37,7 +37,7 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     Optional<ProjectMember>findByProject_IdAndUser_Id(Long projectId, Long userId);
 
     @Query("""
-    SELECT new com.taskly.backend.task.dto.TaskAssignmentOptionDto(
+    SELECT new com.taskly.backend.task.dto.TaskAssignmentStatusDto(
         pm.user.id,
         pm.user.name,
         pm.user.email,

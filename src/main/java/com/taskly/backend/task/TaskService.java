@@ -307,7 +307,9 @@ public class TaskService {
 
         return new TaskSelfAssignmentDto(
                 "Successfully assigned task!",
-                assignee
+                assignee.getId(),
+                assignee.getTask().getId(),
+                assignee.getStatus()
         );
     }
 }
