@@ -147,7 +147,7 @@ public class TaskService {
     }
 
     @Transactional
-    public GetTaskAssignmentStatusResponse taskAssignment(
+    public GetTaskAssignmentStatusResponse taskAssignmentGroup(
             String email, Long projectId, Long taskId, List<Long> assigneeIds
     ) {
 
@@ -257,6 +257,57 @@ public class TaskService {
         return new GetTaskAssignmentStatusResponse(
                 "Task assignees assigned successfully",
                 team
+        );
+    }
+
+    @Transactional
+    public TaskSelfAssignmentDto selfTaskAssignment(
+            String email, Long projectId, Long taskId
+    ) {
+        // Find authenticated user
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
+
+        // Verify project access
+        projectAccessService.getProjectForUser(
+                projectId,
+                currentUser
+        );
+
+        //verify current user's membership in the intended project
+        projectAccessService.getProjectMembership(
+                projectId,
+                currentUser.getId()
+        );
+
+        // Verify task belongs to the requested project
+        Task task =
+                taskAccessService.getTaskByIdAndProjectId(
+                        taskId,
+                        projectId
+                );
+
+        // Check for existing assignments
+        boolean alreadyAssigned =
+                taskAssigneeRepository.existsByTask_IdAndAssignee_Id(
+                        taskId,
+                        currentUser.getId()
+                );
+
+        if (alreadyAssigned) {
+            throw new BadRequestException(
+                    "You are already assigned to the task!"
+            );
+        }
+
+        //Create Assignment
+        TaskAssignee taskAssignee = new TaskAssignee(task, currentUser);
+
+        TaskAssignee assignee = taskAssigneeRepository.save(taskAssignee);
+
+        return new TaskSelfAssignmentDto(
+                "Successfully assigned task!",
+                assignee
         );
     }
 }

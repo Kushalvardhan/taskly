@@ -23,6 +23,8 @@ public class TaskAssignee extends BaseEntity {
 
     public TaskAssignee(Task task, TasklyUser user) {
         super();
+        this.task = task;
+        this.assignee = user;
     }
 
     @Id
@@ -39,5 +41,5 @@ public class TaskAssignee extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private TaskStatus status;
+    private TaskStatus status = TaskStatus.TODO;
 }

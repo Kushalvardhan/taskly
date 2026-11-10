@@ -3,6 +3,7 @@ package com.taskly.backend.task;
 import com.taskly.backend.task.dto.CreateTaskRequestDto;
 import com.taskly.backend.task.dto.CreateTaskResponseDto;
 import com.taskly.backend.task.dto.GetTaskAssignmentStatusResponse;
+import com.taskly.backend.task.dto.TaskSelfAssignmentDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -49,7 +50,7 @@ public class TaskController {
     }
 
     @PostMapping("/{projectId}/tasks/{taskId}/assignees")
-    public ResponseEntity<?> taskAssignment(
+    public ResponseEntity<GetTaskAssignmentStatusResponse> taskAssignmentGroup(
             Authentication authentication,
             @PathVariable Long projectId,
             @PathVariable Long taskId,
@@ -58,8 +59,22 @@ public class TaskController {
         String email = authentication.getName();
 
         GetTaskAssignmentStatusResponse response =
-                taskService.taskAssignment(email, projectId, taskId, userIds);
+                taskService.taskAssignmentGroup(email, projectId, taskId, userIds);
 
-        return(null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{projectId}/tasks/{taskId}/assignee")
+    public ResponseEntity<TaskSelfAssignmentDto> selfTaskAssignment(
+            Authentication authentication,
+            @PathVariable Long projectId,
+            @PathVariable Long taskId
+    ) {
+        String email = authentication.getName();
+
+        TaskSelfAssignmentDto response =
+                taskService.selfTaskAssignment(email, projectId, taskId);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
