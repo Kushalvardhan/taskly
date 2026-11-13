@@ -5,16 +5,27 @@ import com.taskly.backend.access.TaskAccessService;
 import com.taskly.backend.access.UserAccessService;
 import com.taskly.backend.project.*;
 import com.taskly.backend.task.dto.*;
+import com.taskly.backend.task.dto.projection.AssigneePreviewProjection;
+import com.taskly.backend.task.dto.projection.AssignmentSummaryProjection;
+import com.taskly.backend.task.dto.projection.MyAssignmentProjection;
+import com.taskly.backend.task.dto.projection.TaskListItemProjection;
+import com.taskly.backend.task.enums.TaskPriority;
+import com.taskly.backend.task.enums.TaskScope;
+import com.taskly.backend.task.enums.TaskStatus;
+import com.taskly.backend.task.enums.TaskType;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
 import lombok.RequiredArgsConstructor;
 import com.taskly.backend.exception.BadRequestException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -312,4 +323,452 @@ public class TaskService {
                 assignee.getStatus()
         );
     }
+
+    @Transactional(readOnly = true)
+    public TaskListResponseDto getProjectTasks(
+
+            String email, Long projectId, TaskScope scope, TaskStatus status,
+
+            TaskStatus myStatus, TaskPriority priority, TaskType type, Long assigneeId,
+
+            String search, String sortBy, String sortDirection, int page, int size
+
+    ) {
+
+        // --------------------------------------------------
+        // STEP 1: Find authenticated user
+        // --------------------------------------------------
+
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
+
+
+        // --------------------------------------------------
+        // STEP 2: Verify project access
+        // --------------------------------------------------
+
+        projectAccessService.getProjectForUser(
+                projectId,
+                currentUser
+        );
+
+        Long userId = currentUser.getId();
+
+
+        // --------------------------------------------------
+        // STEP 3: Validate sorting
+        // --------------------------------------------------
+
+        Sort sort = getTaskSort(sortBy, sortDirection);
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                sort
+        );
+
+
+        // --------------------------------------------------
+        // STEP 4: Convert scope into boolean flags
+        // --------------------------------------------------
+
+        boolean onlyMyTasks =
+                scope == TaskScope.MY_TASKS;
+
+        boolean onlyCreatedByMe =
+                scope == TaskScope.CREATED_BY_ME;
+
+
+        // --------------------------------------------------
+        // STEP 5: Normalize search
+        // --------------------------------------------------
+
+        if (search == null || search.isBlank()) {
+            search = "";
+        } else {
+            search = search.trim();
+        }
+
+
+        // --------------------------------------------------
+        // STEP 6: QUERY 1 - Fetch paginated task IDs
+        // --------------------------------------------------
+
+        Page<Long> taskIdPage =
+                taskRepository.findFilteredTaskIds(
+
+                        projectId,
+
+                        userId,
+
+                        onlyMyTasks,
+
+                        onlyCreatedByMe,
+
+                        status,
+
+                        myStatus,
+
+                        priority,
+
+                        type,
+
+                        assigneeId,
+
+                        search,
+
+                        pageable
+                );
+
+
+        List<Long> taskIds = taskIdPage.getContent();
+
+
+        // --------------------------------------------------
+        // STEP 7: Handle empty page
+        // --------------------------------------------------
+
+        if (taskIds.isEmpty()) {
+
+            return new TaskListResponseDto(
+
+                    List.of(),
+
+                    taskIdPage.getNumber(),
+
+                    taskIdPage.getSize(),
+
+                    taskIdPage.getTotalElements(),
+
+                    taskIdPage.getTotalPages(),
+
+                    taskIdPage.isLast()
+
+            );
+        }
+
+
+        // --------------------------------------------------
+        // STEP 8: QUERY 2 - Fetch task details
+        // --------------------------------------------------
+
+        List<TaskListItemProjection> taskDetails =
+                taskRepository.findTaskDetailsByIds(taskIds);
+
+
+        Map<Long, TaskListItemProjection> taskDetailsMap =
+                taskDetails.stream()
+                        .collect(Collectors.toMap(
+                                TaskListItemProjection::getTaskId,
+                                Function.identity()
+                        ));
+
+
+        // --------------------------------------------------
+        // STEP 9: QUERY 3 - Fetch assignment summaries
+        // --------------------------------------------------
+
+        List<AssignmentSummaryProjection> summaries =
+                taskRepository.findAssignmentSummaries(
+
+                        taskIds,
+
+                        TaskStatus.COMPLETED,
+
+                        TaskStatus.IN_PROGRESS,
+
+                        TaskStatus.TODO,
+
+                        TaskStatus.CANCELLED
+                );
+
+
+        Map<Long, AssignmentSummaryProjection> summaryMap =
+                summaries.stream()
+                        .collect(Collectors.toMap(
+                                AssignmentSummaryProjection::getTaskId,
+                                Function.identity()
+                        ));
+
+
+        // --------------------------------------------------
+        // STEP 10: QUERY 4 - Fetch current user's assignments
+        // --------------------------------------------------
+
+        List<MyAssignmentProjection> myAssignments =
+                taskRepository.findMyAssignments(
+                        taskIds,
+                        userId
+                );
+
+
+        Map<Long, MyAssignmentProjection> myAssignmentMap =
+                myAssignments.stream()
+                        .collect(Collectors.toMap(
+                                MyAssignmentProjection::getTaskId,
+                                Function.identity()
+                        ));
+
+
+        // --------------------------------------------------
+        // STEP 11: QUERY 5 - Fetch assignee previews
+        // --------------------------------------------------
+
+        List<AssigneePreviewProjection> previews =
+                taskAssigneeRepository.findAssigneePreviews(taskIds);
+
+        Map<Long, List<AssigneePreviewDto>> previewMap =
+                new HashMap<>();
+
+        for (AssigneePreviewProjection preview : previews) {
+
+            AssigneePreviewDto previewDto =
+                    new AssigneePreviewDto(
+                            preview.getUserId(), preview.getName()
+                    );
+
+            previewMap.computeIfAbsent(
+                    preview.getTaskId(),
+                    key -> new ArrayList<>()
+            ).add(previewDto);
+        }
+
+
+        // --------------------------------------------------
+        // STEP 12: Assemble final response
+        // --------------------------------------------------
+
+        List<TaskListItemResponseDto> responseContent =
+                new ArrayList<>();
+
+
+        // IMPORTANT:
+        // Iterate over taskIds, not taskDetails.
+        // This preserves the database pagination order.
+
+        for (Long taskId : taskIds) {
+
+
+            // ----------------------------------------------
+            // Get task details
+            // ----------------------------------------------
+
+            TaskListItemProjection task =
+                    taskDetailsMap.get(taskId);
+
+
+            // ----------------------------------------------
+            // Get assignment summary
+            // ----------------------------------------------
+
+            AssignmentSummaryProjection summary =
+                    summaryMap.get(taskId);
+
+
+            AssignmentSummaryDto assignmentSummary;
+
+            if (summary == null) {
+
+                // No assignees
+
+                assignmentSummary = new AssignmentSummaryDto(
+
+                        0L,
+
+                        0L,
+
+                        0L,
+
+                        0L,
+
+                        0L
+                );
+
+            } else {
+
+                assignmentSummary = new AssignmentSummaryDto(
+
+                        summary.getTotalAssignees(),
+
+                        summary.getCompleted(),
+
+                        summary.getInProgress(),
+
+                        summary.getTodo(),
+
+                        summary.getCancelled()
+                );
+            }
+
+
+            // ----------------------------------------------
+            // Get current user's assignment
+            // ----------------------------------------------
+
+            MyAssignmentProjection myAssignment =
+                    myAssignmentMap.get(taskId);
+
+
+            MyAssignmentDto myAssignmentDto;
+
+            if (myAssignment == null) {
+
+                myAssignmentDto = new MyAssignmentDto(
+
+                        false,
+
+                        null
+                );
+
+            } else {
+
+                myAssignmentDto = new MyAssignmentDto(
+
+                        true,
+
+                        myAssignment.getStatus()
+                );
+            }
+
+
+            // ----------------------------------------------
+            // Get assignee previews
+            // ----------------------------------------------
+
+            List<AssigneePreviewDto> assigneePreview =
+                    previewMap.getOrDefault(
+                            taskId,
+                            List.of()
+                    );
+
+
+            // ----------------------------------------------
+            // Get creator information
+            // ----------------------------------------------
+
+            CreatedByDto createdBy =
+                    new CreatedByDto(
+
+                            task.getCreatorId(),
+
+                            task.getCreatorName()
+                    );
+
+
+            // ----------------------------------------------
+            // Construct task response
+            // ----------------------------------------------
+
+            TaskListItemResponseDto taskResponse =
+                    new TaskListItemResponseDto(
+
+                            task.getTaskId(),
+
+                            task.getTitle(),
+
+                            task.getDescription(),
+
+                            task.getType(),
+
+                            task.getPriority(),
+
+                            task.getOverallStatus(),
+
+                            task.getDeadline(),
+
+                            createdBy,
+
+                            assignmentSummary,
+
+                            myAssignmentDto,
+
+                            assigneePreview
+                    );
+
+            responseContent.add(taskResponse);
+        }
+
+
+        // --------------------------------------------------
+        // STEP 13: Return paginated response
+        // --------------------------------------------------
+
+        return new TaskListResponseDto(
+
+                responseContent,
+
+                taskIdPage.getNumber(),
+
+                taskIdPage.getSize(),
+
+                taskIdPage.getTotalElements(),
+
+                taskIdPage.getTotalPages(),
+
+                taskIdPage.isLast()
+        );
+    }
+
+
+    // ======================================================
+    // SORT VALIDATION
+    // ======================================================
+
+    private Sort getTaskSort(
+            String sortBy,
+            String sortDirection
+    ) {
+
+        // Only allow known entity properties.
+
+        Map<String, String> allowedSortFields = Map.of(
+
+                "deadline", "deadline",
+
+                "createdAt", "createdAt",
+
+                "priority", "priority",
+
+                "title", "title",
+
+                "status", "status"
+        );
+
+
+        String sortProperty =
+                allowedSortFields.get(sortBy);
+
+
+        if (sortProperty == null) {
+
+            throw new IllegalArgumentException(
+                    "Invalid sort field: " + sortBy
+            );
+        }
+
+
+        Sort.Direction direction;
+
+        try {
+
+            direction = Sort.Direction.valueOf(
+                    sortDirection.toUpperCase(Locale.ROOT)
+            );
+
+        } catch (IllegalArgumentException exception) {
+
+            throw new IllegalArgumentException(
+                    "Invalid sort direction. Use ASC or DESC."
+            );
+        }
+
+
+        // Add task ID as a secondary sort field.
+        // This makes pagination more deterministic
+        // when multiple tasks have the same sort value.
+
+        return Sort.by(direction, sortProperty)
+                .and(Sort.by(Sort.Direction.DESC, "id"));
+    }
+
 }

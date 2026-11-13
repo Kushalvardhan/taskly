@@ -1,7 +1,7 @@
 package com.taskly.backend.task.dto;
 
-import com.taskly.backend.task.TaskPriority;
-import com.taskly.backend.task.TaskType;
+import com.taskly.backend.task.enums.TaskPriority;
+import com.taskly.backend.task.enums.TaskType;
 import jakarta.validation.constraints.*;
 
 import java.time.Instant;

@@ -1,4 +1,4 @@
-package com.taskly.backend.task;
+package com.taskly.backend.task.enums;
 
 public enum TaskPriority {
     LOW,
