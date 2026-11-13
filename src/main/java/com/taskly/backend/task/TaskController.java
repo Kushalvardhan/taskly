@@ -1,10 +1,14 @@
 package com.taskly.backend.task;
 
-import com.taskly.backend.task.dto.CreateTaskRequestDto;
-import com.taskly.backend.task.dto.CreateTaskResponseDto;
-import com.taskly.backend.task.dto.GetTaskAssignmentStatusResponse;
-import com.taskly.backend.task.dto.TaskSelfAssignmentDto;
+import com.taskly.backend.task.dto.*;
+import com.taskly.backend.task.enums.TaskPriority;
+import com.taskly.backend.task.enums.TaskScope;
+import com.taskly.backend.task.enums.TaskStatus;
+import com.taskly.backend.task.enums.TaskType;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -77,5 +81,90 @@ public class TaskController {
                 taskService.selfTaskAssignment(email, projectId, taskId);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{projectId}/tasks")
+    public TaskListResponseDto getProjectTasks(
+
+            @PathVariable
+            @Positive
+            Long projectId,
+
+            // Scope filters
+            @RequestParam(defaultValue = "ALL")
+            TaskScope scope,
+
+            // Task filters
+            @RequestParam(required = false)
+            TaskStatus status,
+
+            @RequestParam(required = false)
+            TaskStatus myStatus,
+
+            @RequestParam(required = false)
+            TaskPriority priority,
+
+            @RequestParam(required = false)
+            TaskType type,
+
+            @RequestParam(required = false)
+            @Positive
+            Long assigneeId,
+
+            @RequestParam(required = false)
+            String search,
+
+            // Sorting
+            @RequestParam(defaultValue = "deadline")
+            String sortBy,
+
+            @RequestParam(defaultValue = "ASC")
+            String sortDirection,
+
+            // Pagination
+            @RequestParam(defaultValue = "0")
+            @Min(0)
+            int page,
+
+            @RequestParam(defaultValue = "10")
+            @Min(1)
+            @Max(100)
+            int size,
+
+            // Authenticated user
+            Authentication authentication
+
+    ) {
+
+        String email = authentication.getName();
+
+        return taskService.getProjectTasks(
+
+                email,
+
+                projectId,
+
+                scope,
+
+                status,
+
+                myStatus,
+
+                priority,
+
+                type,
+
+                assigneeId,
+
+                search,
+
+                sortBy,
+
+                sortDirection,
+
+                page,
+
+                size
+        );
     }
 }

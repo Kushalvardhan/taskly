@@ -1,6 +1,7 @@
 package com.taskly.backend.task;
 
 import com.taskly.backend.constants.BaseEntity;
+import com.taskly.backend.task.enums.TaskStatus;
 import com.taskly.backend.user.TasklyUser;
 import jakarta.persistence.*;
 import lombok.*;
