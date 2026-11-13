@@ -85,9 +85,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
                     )
 
                     AND (
-                        :search IS NULL
-                        OR LOWER(t.title)
-                           LIKE LOWER(CONCAT('%', :search, '%'))
+                        :search = ''
+                        OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%'))
                     )
                     """,
 
@@ -148,9 +147,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
                     )
 
                     AND (
-                        :search IS NULL
-                        OR LOWER(t.title)
-                           LIKE LOWER(CONCAT('%', :search, '%'))
+                        :search = ''
+                        OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%'))
                     )
                     """
     )

@@ -383,13 +383,10 @@ public class TaskService {
         // STEP 5: Normalize search
         // --------------------------------------------------
 
-        if (search != null) {
-
+        if (search == null || search.isBlank()) {
+            search = "";
+        } else {
             search = search.trim();
-
-            if (search.isEmpty()) {
-                search = null;
-            }
         }
 
 

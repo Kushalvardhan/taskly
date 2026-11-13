@@ -49,7 +49,7 @@ public interface TaskAssigneeRepository extends JpaRepository<TaskAssignee, Long
                                 ORDER BY ta.created_at ASC, ta.id ASC
                             ) AS row_num
 
-                        FROM task_assignee ta
+                        FROM task_assignees ta
 
                         JOIN users u
                             ON u.id = ta.user_id
