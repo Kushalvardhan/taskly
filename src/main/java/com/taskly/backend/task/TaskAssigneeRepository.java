@@ -1,5 +1,6 @@
 package com.taskly.backend.task;
 
+import com.taskly.backend.task.dto.projection.TaskAssigneeDetailsProjection;
 import com.taskly.backend.task.dto.projection.AssigneePreviewProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -64,6 +65,37 @@ public interface TaskAssigneeRepository extends JpaRepository<TaskAssignee, Long
     )
     List<AssigneePreviewProjection> findAssigneePreviews(
             @Param("taskIds") List<Long> taskIds
+    );
+
+    /*
+     * QUERY 7:
+     * Fetch all assignees of a particular task,
+     * including their project roles and assignment statuses.
+     */
+
+    @Query("""
+        SELECT
+            assignee.id AS userId,
+            assignee.name AS name,
+            projectMember.projectRole AS projectRole,
+            ta.status AS status
+
+        FROM TaskAssignee ta
+
+        JOIN ta.assignee assignee
+
+        JOIN ProjectMember projectMember
+            ON projectMember.user = assignee
+            AND projectMember.project = ta.task.project
+
+        WHERE ta.task.id = :taskId
+        AND ta.task.project.id = :projectId
+
+        ORDER BY ta.createdAt ASC, ta.id ASC
+        """)
+    List<TaskAssigneeDetailsProjection> findTaskAssigneeDetails(
+            @Param("taskId") Long taskId,
+            @Param("projectId") Long projectId
     );
 
 }

@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import com.taskly.backend.task.dto.projection.TaskDetailsProjection;
 
 import java.util.List;
 import java.util.Optional;
@@ -272,5 +273,36 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<MyAssignmentProjection> findMyAssignments(
             @Param("taskIds") List<Long> taskIds,
             @Param("userId") Long userId
+    );
+
+    /*
+     * QUERY 6:
+     * Fetch complete task details and creator information.
+     */
+
+    @Query("""
+        SELECT
+            t.id AS taskId,
+            t.title AS title,
+            t.description AS description,
+            t.type AS type,
+            t.priority AS priority,
+            t.status AS overallStatus,
+            t.startDate AS startDate,
+            t.deadline AS deadline,
+
+            creator.id AS creatorId,
+            creator.name AS creatorName
+
+        FROM Task t
+
+        JOIN t.creator creator
+
+        WHERE t.id = :taskId
+        AND t.project.id = :projectId
+        """)
+    Optional<TaskDetailsProjection> findTaskDetailsByIdAndProjectId(
+            @Param("taskId") Long taskId,
+            @Param("projectId") Long projectId
     );
 }
