@@ -184,4 +184,22 @@ public class TaskController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PatchMapping("/{projectId}/task/{taskId}")
+    public ResponseEntity<UpdateTaskResponseDto> updateTaskDetails(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @Valid @RequestBody UpdateTaskRequestDto taskDto,
+            Authentication authentication
+    ){
+        UpdateTaskResponseDto response =
+                taskService.updateTaskDetails(
+                        authentication.getName(),
+                        projectId,
+                        taskId,
+                        taskDto
+                );
+
+        return ResponseEntity.ok(response);
+    }
 }

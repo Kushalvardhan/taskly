@@ -19,10 +19,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 import java.util.function.Function;
@@ -830,4 +829,101 @@ public class TaskService {
         );
     }
 
+    @Transactional
+    public UpdateTaskResponseDto updateTaskDetails(
+            String email,
+            Long projectId,
+            Long taskId,
+            UpdateTaskRequestDto request
+    ) {
+
+        // 1. Fetch authenticated user
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
+
+
+        // 2. Verify project belongs to user's organisation
+        OrgProject project =
+                projectAccessService.getProjectForUser(
+                        projectId,
+                        currentUser
+                );
+
+
+        // 3. Verify project membership
+        ProjectMember membership =
+                projectAccessService.getProjectMembership(
+                        project.getId(),
+                        currentUser.getId()
+                );
+
+
+        // 4. Fetch task belonging to the specified project
+        Task task =
+                taskAccessService.getTaskByIdAndProjectId(
+                        taskId,
+                        project.getId()
+                );
+
+
+        // 5. Check authorization
+        boolean isProjectManager =
+                membership.getProjectRole() == ProjectRole.PROJECT_MANAGER;
+
+        boolean isTaskCreator =
+                task.getCreator().getId().equals(currentUser.getId());
+
+        if (!isProjectManager && !isTaskCreator) {
+            throw new AccessDeniedException(
+                    "Only Project Managers and task creators can edit task details"
+            );
+        }
+
+
+        // 6. Update only the fields provided in the request
+        if (request.title() != null) {
+
+            if (request.title().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Task title cannot be blank"
+                );
+            }
+
+            task.setTitle(request.title());
+        }
+
+        if (request.description() != null) {
+            task.setDescription(request.description());
+        }
+
+        if (request.type() != null) {
+            task.setType(request.type());
+        }
+
+        if (request.priority() != null) {
+            task.setPriority(request.priority());
+        }
+
+        if (request.startDate() != null) {
+            task.setStartDate(request.startDate());
+        }
+
+        if (request.deadline() != null) {
+            task.setDeadline(request.deadline());
+        }
+
+        // 7. Save updated task
+        Task updatedTask = taskRepository.save(task);
+
+        // 8. Return response DTO
+        return new UpdateTaskResponseDto(
+                updatedTask.getId(),
+                updatedTask.getTitle(),
+                updatedTask.getDescription(),
+                updatedTask.getType(),
+                updatedTask.getPriority(),
+                updatedTask.getStartDate(),
+                updatedTask.getDeadline()
+        );
+    }
 }
