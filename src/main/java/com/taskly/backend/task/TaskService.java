@@ -1006,6 +1006,7 @@ public class TaskService {
                 taskAssigneeRepository.existsByTask_Id(taskId);
 
         if (!hasAssignees) {
+            task.setStatus(TaskStatus.TODO);
             return;
         }
 
@@ -1038,7 +1039,123 @@ public class TaskService {
                             : TaskStatus.TODO
             );
         }
+    }
 
-        taskRepository.save(task);
+    @Transactional
+    public void removeMyAssignment(
+            String email,
+            Long projectId,
+            Long taskId
+    ) {
+
+        // 1. Get authenticated user
+        TasklyUser user = userAccessService.getUserByEmail(email);
+
+
+        // 2. Verify project membership
+        projectAccessService.getProjectForUser(projectId, user);
+
+        projectAccessService.getProjectMembership(
+                projectId,
+                user.getId()
+        );
+
+
+        // 3. Verify task belongs to project
+        Task task = taskAccessService.getTaskByIdAndProjectId(
+                taskId,
+                projectId
+        );
+
+
+        // 4. Find authenticated user's assignment
+        TaskAssignee taskAssignee =
+                taskAssigneeRepository
+                        .findByTask_IdAndAssignee_Id(
+                                taskId,
+                                user.getId()
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "You are not assigned to this task"
+                                )
+                        );
+
+
+        // 5. Remove assignment
+        taskAssigneeRepository.delete(taskAssignee);
+
+
+        // 6. Flush deletion before recalculating progress
+        taskAssigneeRepository.flush();
+
+
+        // 7. Recalculate overall task status
+        updateOverallTaskStatus(task);
+    }
+
+    @Transactional
+    public void removeMemberAssignment(
+            String email,
+            Long projectId,
+            Long taskId,
+            Long userId
+    ) {
+
+        // 1. Get authenticated manager
+        TasklyUser manager = userAccessService.getUserByEmail(email);
+
+
+        // 2. Verify manager belongs to project
+        projectAccessService.getProjectForUser(projectId, manager);
+
+        ProjectMember managerMembership =
+                projectAccessService.getProjectMembership(
+                        projectId,
+                        manager.getId()
+                );
+
+
+        // 3. Verify project manager role
+        if (managerMembership.getProjectRole()
+                != ProjectRole.PROJECT_MANAGER) {
+
+            throw new AccessDeniedException(
+                    "Only project managers can remove member assignments"
+            );
+        }
+
+
+        // 4. Verify task belongs to project
+        Task task = taskAccessService.getTaskByIdAndProjectId(
+                taskId,
+                projectId
+        );
+
+
+        // 5. Find target user's assignment
+        TaskAssignee taskAssignee =
+                taskAssigneeRepository
+                        .findByTask_IdAndAssignee_Id(
+                                taskId,
+                                userId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "The specified user is not assigned to this task"
+                                )
+                        );
+
+
+        // 6. Remove assignment
+        taskAssigneeRepository.delete(taskAssignee);
+
+
+        // 7. Flush deletion
+        taskAssigneeRepository.flush();
+
+
+        // 8. Recalculate overall task status
+        updateOverallTaskStatus(task);
     }
 }
