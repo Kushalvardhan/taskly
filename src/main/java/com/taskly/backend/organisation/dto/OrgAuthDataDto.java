@@ -1,7 +1,6 @@
 package com.taskly.backend.organisation.dto;
 
-public record OrgAuthResponseDto(
-        String message,
+public record OrgAuthDataDto(
         OrganisationResponseDto organisation,
         OrganisationUserDto user,
         String jwtToken

@@ -1,13 +1,17 @@
 package com.taskly.backend.organisation;
 
+import com.taskly.backend.common.ApiResponse;
 import com.taskly.backend.organisation.dto.*;
 import com.taskly.backend.security.util.JwtUtil;
 import com.taskly.backend.user.TasklyUser;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
 
 @RestController
 @RequestMapping("/api/organisation")
@@ -19,70 +23,45 @@ public class OrgController {
 
     // CREATE ORGANISATION
     @PostMapping("/register")
-    public ResponseEntity<OrgAuthResponseDto> registerOrg(
+    public ResponseEntity<ApiResponse<OrgAuthDataDto>> registerOrg(
             @RequestBody CreateOrgRequestDto request,
             Authentication authentication
     ) {
-
-        OrgOperationResult result = orgService.registerOrg(
+        OrgAuthDataDto data = orgService.registerOrg(
                 request,
                 authentication.getName()
         );
 
-        return buildResponse("Organisation created successfully", result);
+        ApiResponse<OrgAuthDataDto> response =
+                new ApiResponse<>(
+                        "Organisation created successfully",
+                        HttpStatus.CREATED.value(),
+                        Instant.now(),
+                        data
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
     }
 
-    // JOIN ORGANISATION
     @PostMapping("/join")
-    public ResponseEntity<OrgAuthResponseDto> joinOrg(
+    public ResponseEntity<ApiResponse<OrgAuthDataDto>> joinOrg(
             @RequestBody JoinOrgRequestDto request,
             Authentication authentication
     ) {
 
-        OrgOperationResult result = orgService.joinOrg(
+        OrgAuthDataDto data = orgService.joinOrg(
                 request,
                 authentication.getName()
         );
 
-        return buildResponse("Organisation joined successfully", result);
-    }
-
-    // COMMON RESPONSE BUILDER
-    private ResponseEntity<OrgAuthResponseDto> buildResponse(String message, OrgOperationResult result) {
-
-        Organisation org = result.organisation();
-        TasklyUser user = result.user();
-
-        // Organisation DTO
-        OrganisationResponseDto orgDto =
-                new OrganisationResponseDto(
-                        org.getId(),
-                        org.getName(),
-                        org.getCode(),
-                        org.getCreatedBy().getId(),
-                        org.getCreatedAt(),
-                        org.getUpdatedAt()
-                );
-
-        // Updated authenticated user DTO
-        OrganisationUserDto userDto =
-                new OrganisationUserDto(
-                        user.getId(),
-                        user.getName(),
-                        user.getEmail(),
-                        user.getOrganisationRole().name()
-                );
-
-        // Generate new JWT with updated role
-        String newJwtToken = jwtUtil.generateJwtToken(user);
-
-        // Final response
-        OrgAuthResponseDto response =
-                new OrgAuthResponseDto(
-                        message,
-                        orgDto,
-                        userDto,
-                        newJwtToken
+        ApiResponse<OrgAuthDataDto> response =
+                new ApiResponse<>(
+                        "Organisation joined successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
                 );
 
         return ResponseEntity.ok(response);
