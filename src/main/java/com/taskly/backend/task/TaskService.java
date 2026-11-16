@@ -41,7 +41,7 @@ public class TaskService {
     private final TaskAccessService taskAccessService;
 
     @Transactional
-    public CreateTaskResponseDto createTask(String email, Long projectId, CreateTaskRequestDto request) {
+    public TaskResponseDto createTask(String email, Long projectId, CreateTaskRequestDto request) {
         // Find authenticated user
         TasklyUser currentUser =
                 userAccessService.getUserByEmail(email);
@@ -78,7 +78,6 @@ public class TaskService {
         Task savedTask = taskRepository.save(task);
 
         TaskAssignee savedAssignee = null;
-        String message = "Task created successfully";
 
         // Automatically assign the creator if they are a MEMBER
         if (role == ProjectRole.MEMBER) {
@@ -91,15 +90,13 @@ public class TaskService {
 
             savedAssignee =
                     taskAssigneeRepository.save(taskAssignee);
-
-            message = "Task created with successful self assignment";
         }
 
         Long assigneeId = savedAssignee != null
                 ? savedAssignee.getAssignee().getId()
                 : null;
 
-        TaskResponseDto response = new TaskResponseDto(
+        return new TaskResponseDto(
                 savedTask.getId(),
                 savedTask.getProject().getId(),
                 savedTask.getCreator().getId(),
@@ -113,12 +110,10 @@ public class TaskService {
                 savedTask.getStatus(),
                 savedTask.getCreatedAt()
         );
-
-        return new CreateTaskResponseDto(message, response);
     }
 
     @Transactional(readOnly = true)
-    public GetTaskAssignmentStatusResponse getTaskAssignmentOptions(
+    public List<TaskAssignmentStatusDto> getTaskAssignmentOptions(
             String email, Long projectId, Long taskId
     ) {
         // Find authenticated user
@@ -144,20 +139,14 @@ public class TaskService {
         );
 
         // Retrieve project members with their assignment status
-        List<TaskAssignmentStatusDto> team =
-                projectMemberRepository.findTaskAssignmentOptions(
-                        projectId,
-                        taskId
-                );
-
-        return new GetTaskAssignmentStatusResponse(
-                "Task assignment options retrieved successfully",
-                team
+        return projectMemberRepository.findTaskAssignmentOptions(
+                projectId,
+                taskId
         );
     }
 
     @Transactional
-    public GetTaskAssignmentStatusResponse taskAssignmentGroup(
+    public List<TaskAssignmentStatusDto> taskAssignmentGroup(
             String email, Long projectId, Long taskId, List<Long> assigneeIds
     ) {
 
@@ -258,15 +247,9 @@ public class TaskService {
         taskAssigneeRepository.saveAll(taskAssignees);
 
         // Fetch updated assignment options
-        List<TaskAssignmentStatusDto> team =
-                projectMemberRepository.findTaskAssignmentOptions(
-                        projectId,
-                        taskId
-                );
-
-        return new GetTaskAssignmentStatusResponse(
-                "Task assignees assigned successfully",
-                team
+        return projectMemberRepository.findTaskAssignmentOptions(
+                projectId,
+                taskId
         );
     }
 
@@ -316,7 +299,6 @@ public class TaskService {
         TaskAssignee assignee = taskAssigneeRepository.save(taskAssignee);
 
         return new TaskSelfAssignmentDto(
-                "Successfully assigned task!",
                 assignee.getId(),
                 assignee.getTask().getId(),
                 assignee.getStatus()
