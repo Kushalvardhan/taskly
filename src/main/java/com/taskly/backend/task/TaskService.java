@@ -3,12 +3,10 @@ package com.taskly.backend.task;
 import com.taskly.backend.access.ProjectAccessService;
 import com.taskly.backend.access.TaskAccessService;
 import com.taskly.backend.access.UserAccessService;
+import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.project.*;
 import com.taskly.backend.task.dto.*;
-import com.taskly.backend.task.dto.projection.AssigneePreviewProjection;
-import com.taskly.backend.task.dto.projection.AssignmentSummaryProjection;
-import com.taskly.backend.task.dto.projection.MyAssignmentProjection;
-import com.taskly.backend.task.dto.projection.TaskListItemProjection;
+import com.taskly.backend.task.dto.projection.*;
 import com.taskly.backend.task.enums.TaskPriority;
 import com.taskly.backend.task.enums.TaskScope;
 import com.taskly.backend.task.enums.TaskStatus;
@@ -21,8 +19,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 import java.util.function.Function;
@@ -335,18 +335,11 @@ public class TaskService {
 
     ) {
 
-        // --------------------------------------------------
         // STEP 1: Find authenticated user
-        // --------------------------------------------------
-
         TasklyUser currentUser =
                 userAccessService.getUserByEmail(email);
 
-
-        // --------------------------------------------------
         // STEP 2: Verify project access
-        // --------------------------------------------------
-
         projectAccessService.getProjectForUser(
                 projectId,
                 currentUser
@@ -354,11 +347,7 @@ public class TaskService {
 
         Long userId = currentUser.getId();
 
-
-        // --------------------------------------------------
         // STEP 3: Validate sorting
-        // --------------------------------------------------
-
         Sort sort = getTaskSort(sortBy, sortDirection);
 
         Pageable pageable = PageRequest.of(
@@ -367,33 +356,21 @@ public class TaskService {
                 sort
         );
 
-
-        // --------------------------------------------------
         // STEP 4: Convert scope into boolean flags
-        // --------------------------------------------------
-
         boolean onlyMyTasks =
                 scope == TaskScope.MY_TASKS;
 
         boolean onlyCreatedByMe =
                 scope == TaskScope.CREATED_BY_ME;
 
-
-        // --------------------------------------------------
         // STEP 5: Normalize search
-        // --------------------------------------------------
-
         if (search == null || search.isBlank()) {
             search = "";
         } else {
             search = search.trim();
         }
 
-
-        // --------------------------------------------------
         // STEP 6: QUERY 1 - Fetch paginated task IDs
-        // --------------------------------------------------
-
         Page<Long> taskIdPage =
                 taskRepository.findFilteredTaskIds(
 
@@ -423,11 +400,7 @@ public class TaskService {
 
         List<Long> taskIds = taskIdPage.getContent();
 
-
-        // --------------------------------------------------
         // STEP 7: Handle empty page
-        // --------------------------------------------------
-
         if (taskIds.isEmpty()) {
 
             return new TaskListResponseDto(
@@ -447,11 +420,7 @@ public class TaskService {
             );
         }
 
-
-        // --------------------------------------------------
         // STEP 8: QUERY 2 - Fetch task details
-        // --------------------------------------------------
-
         List<TaskListItemProjection> taskDetails =
                 taskRepository.findTaskDetailsByIds(taskIds);
 
@@ -463,11 +432,7 @@ public class TaskService {
                                 Function.identity()
                         ));
 
-
-        // --------------------------------------------------
         // STEP 9: QUERY 3 - Fetch assignment summaries
-        // --------------------------------------------------
-
         List<AssignmentSummaryProjection> summaries =
                 taskRepository.findAssignmentSummaries(
 
@@ -482,7 +447,6 @@ public class TaskService {
                         TaskStatus.CANCELLED
                 );
 
-
         Map<Long, AssignmentSummaryProjection> summaryMap =
                 summaries.stream()
                         .collect(Collectors.toMap(
@@ -490,11 +454,7 @@ public class TaskService {
                                 Function.identity()
                         ));
 
-
-        // --------------------------------------------------
         // STEP 10: QUERY 4 - Fetch current user's assignments
-        // --------------------------------------------------
-
         List<MyAssignmentProjection> myAssignments =
                 taskRepository.findMyAssignments(
                         taskIds,
@@ -509,11 +469,7 @@ public class TaskService {
                                 Function.identity()
                         ));
 
-
-        // --------------------------------------------------
         // STEP 11: QUERY 5 - Fetch assignee previews
-        // --------------------------------------------------
-
         List<AssigneePreviewProjection> previews =
                 taskAssigneeRepository.findAssigneePreviews(taskIds);
 
@@ -533,11 +489,7 @@ public class TaskService {
             ).add(previewDto);
         }
 
-
-        // --------------------------------------------------
         // STEP 12: Assemble final response
-        // --------------------------------------------------
-
         List<TaskListItemResponseDto> responseContent =
                 new ArrayList<>();
 
@@ -548,19 +500,11 @@ public class TaskService {
 
         for (Long taskId : taskIds) {
 
-
-            // ----------------------------------------------
             // Get task details
-            // ----------------------------------------------
-
             TaskListItemProjection task =
                     taskDetailsMap.get(taskId);
 
-
-            // ----------------------------------------------
             // Get assignment summary
-            // ----------------------------------------------
-
             AssignmentSummaryProjection summary =
                     summaryMap.get(taskId);
 
@@ -570,7 +514,6 @@ public class TaskService {
             if (summary == null) {
 
                 // No assignees
-
                 assignmentSummary = new AssignmentSummaryDto(
 
                         0L,
@@ -600,11 +543,7 @@ public class TaskService {
                 );
             }
 
-
-            // ----------------------------------------------
             // Get current user's assignment
-            // ----------------------------------------------
-
             MyAssignmentProjection myAssignment =
                     myAssignmentMap.get(taskId);
 
@@ -630,22 +569,14 @@ public class TaskService {
                 );
             }
 
-
-            // ----------------------------------------------
             // Get assignee previews
-            // ----------------------------------------------
-
             List<AssigneePreviewDto> assigneePreview =
                     previewMap.getOrDefault(
                             taskId,
                             List.of()
                     );
 
-
-            // ----------------------------------------------
             // Get creator information
-            // ----------------------------------------------
-
             CreatedByDto createdBy =
                     new CreatedByDto(
 
@@ -654,11 +585,7 @@ public class TaskService {
                             task.getCreatorName()
                     );
 
-
-            // ----------------------------------------------
             // Construct task response
-            // ----------------------------------------------
-
             TaskListItemResponseDto taskResponse =
                     new TaskListItemResponseDto(
 
@@ -687,12 +614,8 @@ public class TaskService {
 
             responseContent.add(taskResponse);
         }
-
-
-        // --------------------------------------------------
+        
         // STEP 13: Return paginated response
-        // --------------------------------------------------
-
         return new TaskListResponseDto(
 
                 responseContent,
@@ -769,6 +692,142 @@ public class TaskService {
 
         return Sort.by(direction, sortProperty)
                 .and(Sort.by(Sort.Direction.DESC, "id"));
+    }
+
+    @Transactional(readOnly = true)
+    public TaskDetailsResponseDto getTaskDetails(
+            String email,
+            Long projectId,
+            Long taskId
+    ) {
+
+        // STEP 1: Find authenticated user
+        TasklyUser currentUser =
+                userAccessService.getUserByEmail(email);
+
+        // STEP 2: Verify project access
+        projectAccessService.getProjectForUser(
+                projectId,
+                currentUser
+        );
+
+        // STEP 3: QUERY 6 - Fetch task details
+        TaskDetailsProjection task =
+                taskRepository.findTaskDetailsByIdAndProjectId(
+                        taskId,
+                        projectId
+                ).orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Task not found in this project"
+                        )
+                );
+
+        // STEP 4: QUERY 7 - Fetch all assignees
+        List<TaskAssigneeDetailsProjection> assigneeProjections =
+                taskAssigneeRepository.findTaskAssigneeDetails(
+                        taskId,
+                        projectId
+                );
+
+        // STEP 5: Convert projections into assignee DTOs
+        List<TaskAssigneeDetailsDto> assignees =
+                assigneeProjections.stream()
+                        .map(assignee -> new TaskAssigneeDetailsDto(
+                                assignee.getUserId(),
+                                assignee.getName(),
+                                assignee.getProjectRole(),
+                                assignee.getStatus()
+                        ))
+                        .toList();
+
+        // STEP 6: Calculate assignment summary
+        long totalAssignees = assigneeProjections.size();
+
+        long completed = assigneeProjections.stream()
+                .filter(a -> a.getStatus() == TaskStatus.COMPLETED)
+                .count();
+
+        long inProgress = assigneeProjections.stream()
+                .filter(a -> a.getStatus() == TaskStatus.IN_PROGRESS)
+                .count();
+
+        long todo = assigneeProjections.stream()
+                .filter(a -> a.getStatus() == TaskStatus.TODO)
+                .count();
+
+        long cancelled = assigneeProjections.stream()
+                .filter(a -> a.getStatus() == TaskStatus.CANCELLED)
+                .count();
+
+        AssignmentSummaryDto assignmentSummary =
+                new AssignmentSummaryDto(
+                        totalAssignees,
+                        completed,
+                        inProgress,
+                        todo,
+                        cancelled
+                );
+        
+        // STEP 7: Find current user's assignment
+        Long currentUserId = currentUser.getId();
+
+        Optional<TaskAssigneeDetailsProjection> myAssignment =
+                assigneeProjections.stream()
+                        .filter(a -> a.getUserId().equals(currentUserId))
+                        .findFirst();
+
+
+        MyAssignmentDto myAssignmentDto;
+
+        if (myAssignment.isPresent()) {
+
+            myAssignmentDto = new MyAssignmentDto(
+                    true,
+                    myAssignment.get().getStatus()
+            );
+
+        } else {
+
+            myAssignmentDto = new MyAssignmentDto(
+                    false,
+                    null
+            );
+        }
+        
+        // STEP 8: Construct creator information
+        CreatedByDto createdBy =
+                new CreatedByDto(
+                        task.getCreatorId(),
+                        task.getCreatorName()
+                );
+
+        // STEP 9: Construct final response
+        return new TaskDetailsResponseDto(
+
+                task.getTaskId(),
+
+                task.getTitle(),
+
+                task.getDescription(),
+
+                task.getType(),
+
+                task.getPriority(),
+
+                task.getOverallStatus(),
+
+                task.getStartDate(),
+
+                task.getDeadline(),
+
+                createdBy,
+
+                assignmentSummary,
+
+                myAssignmentDto,
+
+                assignees
+        );
     }
 
 }

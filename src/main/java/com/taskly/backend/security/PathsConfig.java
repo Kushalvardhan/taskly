@@ -55,7 +55,9 @@ public class PathsConfig {
                 "/api/project/*/tasks/*/assignees/options",
                 "/api/project/*/tasks/*/assignees",
                 "/api/project/*/tasks/*/assignee",
-                "/api/project/*/tasks"
+                "/api/project/*/tasks",
+                "/api/project/*/task/*"
+
         );
     }
 }

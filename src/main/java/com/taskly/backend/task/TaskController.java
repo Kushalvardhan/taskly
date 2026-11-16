@@ -167,4 +167,21 @@ public class TaskController {
                 size
         );
     }
+
+    @GetMapping("/{projectId}/task/{taskId}")
+    public ResponseEntity<TaskDetailsResponseDto> getTaskDetails(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+
+        TaskDetailsResponseDto response =
+                taskService.getTaskDetails(
+                        authentication.getName(),
+                        projectId,
+                        taskId
+                );
+
+        return ResponseEntity.ok(response);
+    }
 }
