@@ -926,4 +926,119 @@ public class TaskService {
                 updatedTask.getDeadline()
         );
     }
+
+    @Transactional
+    public UpdateAssignmentStatusDto updateMyAssignmentStatus(
+            String email,
+            Long projectId,
+            Long taskId,
+            UpdateAssignmentStatusRequestDto request
+    ) {
+
+        // 1. Get authenticated user
+        TasklyUser user = userAccessService.getUserByEmail(email);
+
+
+        // 2. Verify project membership
+        projectAccessService.getProjectForUser(projectId, user);
+
+        projectAccessService.getProjectMembership(
+                projectId,
+                user.getId()
+        );
+
+
+        // 3. Verify task belongs to the project
+        Task task = taskAccessService.getTaskByIdAndProjectId(
+                taskId,
+                projectId
+        );
+
+
+        // 4. Validate requested assignment status
+        TaskStatus newStatus = request.status();
+
+        if (newStatus == TaskStatus.CANCELLED) {
+            throw new BadRequestException(
+                    "CANCELLED is not a valid assignment status"
+            );
+        }
+
+
+        // 5. Find authenticated user's assignment
+        TaskAssignee taskAssignee =
+                taskAssigneeRepository
+                        .findByTask_IdAndAssignee_Id(taskId, user.getId())
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "You are not assigned to this task"
+                                )
+                        );
+
+
+        // 6. Update individual assignment status
+        taskAssignee.setStatus(newStatus);
+
+        // 7. Recalculate overall task status
+        updateOverallTaskStatus(task);
+
+        // 8. Flush pending changes to the database
+        taskAssigneeRepository.flush();
+
+        // 9. Prepare response
+        return new UpdateAssignmentStatusDto(
+                task.getId(),
+                user.getId(),
+                taskAssignee.getStatus(),
+                taskAssignee.getUpdatedAt()
+        );
+    }
+
+    private void updateOverallTaskStatus(Task task) {
+
+        if (task.getStatus() == TaskStatus.CANCELLED) {
+            return;
+        }
+
+        Long taskId = task.getId();
+
+        boolean hasAssignees =
+                taskAssigneeRepository.existsByTask_Id(taskId);
+
+        if (!hasAssignees) {
+            return;
+        }
+
+        boolean hasIncompleteAssignees =
+                taskAssigneeRepository.existsByTask_IdAndStatusNot(
+                        taskId,
+                        TaskStatus.COMPLETED
+                );
+
+        // Everyone completed the task
+        if (!hasIncompleteAssignees) {
+
+            task.setStatus(TaskStatus.COMPLETED);
+
+        } else {
+
+            boolean hasStarted =
+                    taskAssigneeRepository.existsByTask_IdAndStatus(
+                            taskId,
+                            TaskStatus.IN_PROGRESS
+                    ) ||
+                            taskAssigneeRepository.existsByTask_IdAndStatus(
+                                    taskId,
+                                    TaskStatus.COMPLETED
+                            );
+
+            task.setStatus(
+                    hasStarted
+                            ? TaskStatus.IN_PROGRESS
+                            : TaskStatus.TODO
+            );
+        }
+
+        taskRepository.save(task);
+    }
 }
