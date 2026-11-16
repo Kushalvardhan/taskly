@@ -234,4 +234,64 @@ public class TaskController {
 
         return ResponseEntity.ok(response);
     }
+
+    @DeleteMapping(
+            "/{projectId}/task/{taskId}/assignees/me"
+    )
+    public ResponseEntity<ApiResponse<Void>> removeMyAssignment(
+
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+
+            Authentication authentication
+    ) {
+
+        String email = authentication.getName();
+
+        taskService.removeMyAssignment(
+                email,
+                projectId,
+                taskId
+        );
+
+        ApiResponse<Void> response = new ApiResponse<>(
+                "Your task assignment has been removed successfully",
+                HttpStatus.OK.value(),
+                Instant.now(),
+                null
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping(
+            "/{projectId}/task/{taskId}/assignees/{userId}"
+    )
+    public ResponseEntity<ApiResponse<Void>> removeMemberAssignment(
+
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @PathVariable Long userId,
+
+            Authentication authentication
+    ) {
+
+        String email = authentication.getName();
+
+        taskService.removeMemberAssignment(
+                email,
+                projectId,
+                taskId,
+                userId
+        );
+
+        ApiResponse<Void> response = new ApiResponse<>(
+                "Member assignment has been removed successfully",
+                HttpStatus.OK.value(),
+                Instant.now(),
+                null
+        );
+
+        return ResponseEntity.ok(response);
+    }
 }
