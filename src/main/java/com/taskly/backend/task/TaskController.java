@@ -28,36 +28,53 @@ public class TaskController {
     private final TaskService taskService;
 
     @PostMapping("/{projectId}/task/create")
-    public ResponseEntity<?> createTask(
+    public ResponseEntity<ApiResponse<TaskResponseDto>> createTask(
             Authentication authentication,
             @PathVariable Long projectId,
             @Valid @RequestBody CreateTaskRequestDto request
-            ){
+    ) {
 
         String email = authentication.getName();
 
-        CreateTaskResponseDto response =
+        TaskResponseDto data =
                 taskService.createTask(email, projectId, request);
+
+        ApiResponse<TaskResponseDto> response = new ApiResponse<>(
+                "Task created successfully",
+                HttpStatus.CREATED.value(),
+                Instant.now(),
+                data
+        );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{projectId}/tasks/{taskId}/assignees/options")
-    public ResponseEntity<GetTaskAssignmentStatusResponse> getTaskAssignmentOptions(
+    public ResponseEntity<ApiResponse<List<TaskAssignmentStatusDto>>> getTaskAssignmentOptions(
             Authentication authentication,
             @PathVariable Long projectId,
             @PathVariable Long taskId
-    ){
+    ) {
         String email = authentication.getName();
 
-        GetTaskAssignmentStatusResponse response =
-                taskService.getTaskAssignmentOptions(email, projectId, taskId);
+        List<TaskAssignmentStatusDto> data =
+                taskService.getTaskAssignmentOptions(
+                        email, projectId, taskId
+                );
+
+        ApiResponse<List<TaskAssignmentStatusDto>> response =
+                new ApiResponse<>(
+                        "Task assignment options retrieved successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
+                );
 
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{projectId}/tasks/{taskId}/assignees")
-    public ResponseEntity<GetTaskAssignmentStatusResponse> taskAssignmentGroup(
+    public ResponseEntity<ApiResponse<List<TaskAssignmentStatusDto>>> taskAssignmentGroup(
             Authentication authentication,
             @PathVariable Long projectId,
             @PathVariable Long taskId,
@@ -65,28 +82,53 @@ public class TaskController {
     ) {
         String email = authentication.getName();
 
-        GetTaskAssignmentStatusResponse response =
-                taskService.taskAssignmentGroup(email, projectId, taskId, userIds);
+        List<TaskAssignmentStatusDto> data =
+                taskService.taskAssignmentGroup(
+                        email,
+                        projectId,
+                        taskId,
+                        userIds
+                );
+
+        ApiResponse<List<TaskAssignmentStatusDto>> response =
+                new ApiResponse<>(
+                        "Task assignees assigned successfully",
+                        HttpStatus.CREATED.value(),
+                        Instant.now(),
+                        data
+                );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/{projectId}/tasks/{taskId}/assignee")
-    public ResponseEntity<TaskSelfAssignmentDto> selfTaskAssignment(
+    public ResponseEntity<ApiResponse<TaskSelfAssignmentDto>> selfTaskAssignment(
             Authentication authentication,
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
         String email = authentication.getName();
 
-        TaskSelfAssignmentDto response =
-                taskService.selfTaskAssignment(email, projectId, taskId);
+        TaskSelfAssignmentDto data =
+                taskService.selfTaskAssignment(
+                        email,
+                        projectId,
+                        taskId
+                );
+
+        ApiResponse<TaskSelfAssignmentDto> response =
+                new ApiResponse<>(
+                        "Successfully assigned task!",
+                        HttpStatus.CREATED.value(),
+                        Instant.now(),
+                        data
+                );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{projectId}/tasks")
-    public TaskListResponseDto getProjectTasks(
+    public ResponseEntity<ApiResponse<TaskListResponseDto>> getProjectTasks(
 
             @PathVariable
             @Positive
@@ -140,66 +182,78 @@ public class TaskController {
 
         String email = authentication.getName();
 
-        return taskService.getProjectTasks(
-
+        TaskListResponseDto data = taskService.getProjectTasks(
                 email,
-
                 projectId,
-
                 scope,
-
                 status,
-
                 myStatus,
-
                 priority,
-
                 type,
-
                 assigneeId,
-
                 search,
-
                 sortBy,
-
                 sortDirection,
-
                 page,
-
                 size
         );
+
+        ApiResponse<TaskListResponseDto> response = new ApiResponse<>(
+                "Project tasks retrieved successfully",
+                HttpStatus.OK.value(),
+                Instant.now(),
+                data
+        );
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{projectId}/task/{taskId}")
-    public ResponseEntity<TaskDetailsResponseDto> getTaskDetails(
+    public ResponseEntity<ApiResponse<TaskDetailsResponseDto>> getTaskDetails(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
             Authentication authentication
     ) {
 
-        TaskDetailsResponseDto response =
+        TaskDetailsResponseDto data =
                 taskService.getTaskDetails(
                         authentication.getName(),
                         projectId,
                         taskId
                 );
 
+        ApiResponse<TaskDetailsResponseDto> response =
+                new ApiResponse<>(
+                        "Task details retrieved successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
+                );
+
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{projectId}/task/{taskId}")
-    public ResponseEntity<UpdateTaskResponseDto> updateTaskDetails(
+    public ResponseEntity<ApiResponse<UpdateTaskResponseDto>> updateTaskDetails(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
             @Valid @RequestBody UpdateTaskRequestDto taskDto,
             Authentication authentication
     ){
-        UpdateTaskResponseDto response =
+        UpdateTaskResponseDto data =
                 taskService.updateTaskDetails(
                         authentication.getName(),
                         projectId,
                         taskId,
                         taskDto
+                );
+
+        ApiResponse<UpdateTaskResponseDto> response =
+                new ApiResponse<>(
+                        "Task details updated successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
                 );
 
         return ResponseEntity.ok(response);

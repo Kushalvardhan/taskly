@@ -1,5 +1,6 @@
 package com.taskly.backend.project;
 
+import com.taskly.backend.common.ApiResponse;
 import com.taskly.backend.project.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -19,34 +21,50 @@ public class ProjectController {
     private final ProjectService projectService;
 
     @GetMapping
-    public ResponseEntity<List<ProjectListDto>> getAllProjects(
+    public ResponseEntity<ApiResponse<List<ProjectListDto>>> getAllProjects(
             Authentication authentication
     ) {
 
         String email = authentication.getName();
 
-        List<ProjectListDto> projects =
+        List<ProjectListDto> data =
                 projectService.getAllProjects(email);
 
-        return ResponseEntity.ok(projects);
+        ApiResponse<List<ProjectListDto>> response =
+                new ApiResponse<>(
+                        "Projects retrieved successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{projectId}")
-    public ResponseEntity<ViewProjectDto> getProject(
+    public ResponseEntity<ApiResponse<ViewProjectDto>> getProject(
             Authentication authentication,
-            @PathVariable Long projectId) {
-
+            @PathVariable Long projectId
+    ) {
         String email = authentication.getName();
 
-        ViewProjectDto project = projectService.getProject(email, projectId);
+        ViewProjectDto data =
+                projectService.getProject(email, projectId);
 
-        return ResponseEntity.ok(project);
+        ApiResponse<ViewProjectDto> response =
+                new ApiResponse<>(
+                        "Project details retrieved successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
+                );
 
+        return ResponseEntity.ok(response);
     }
 
     //Create Project
     @PostMapping("/create")
-    public ResponseEntity<ProjectResponseDto> createProject(
+    public ResponseEntity<ApiResponse<ProjectDto>> createProject(
             @Valid @RequestBody CreateProjReqDto request,
             Authentication authentication
     ) {
@@ -60,33 +78,40 @@ public class ProjectController {
 
     //Join Project
     @PostMapping("/{projectId}/join")
-    public ResponseEntity<ProjectMemberResponseDto> joinProject(
+    public ResponseEntity<ApiResponse<ProjectMemberDto>> joinProject(
             Authentication authentication,
-            @PathVariable Long projectId) {
+            @PathVariable Long projectId
+    ) {
 
         String email = authentication.getName();
-        ProjectMemberDto projectMember = projectService.joinProject(email, projectId);
 
-        ProjectMemberResponseDto response =
-                new ProjectMemberResponseDto(
+        ProjectMemberDto data =
+                projectService.joinProject(email, projectId);
+
+        ApiResponse<ProjectMemberDto> response =
+                new ApiResponse<>(
                         "Successfully Joined the Project",
-                        projectMember
-        );
+                        HttpStatus.CREATED.value(),
+                        Instant.now(),
+                        data
+                );
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
     }
 
-    public ResponseEntity<ProjectResponseDto> builder(
+    public ResponseEntity<ApiResponse<ProjectDto>> builder(
             String message,
             OrgProject project
     ) {
-        //Create Dto
+        // Create DTO
         ProjectDto projectDto = new ProjectDto();
 
-        //Copy Properties
+        // Copy properties
         BeanUtils.copyProperties(project, projectDto);
 
-        //Manually set Id fields
+        // Manually set ID fields
         projectDto.setOrganisationId(
                 project.getOrganisation().getId()
         );
@@ -95,51 +120,63 @@ public class ProjectController {
                 project.getCreatedBy()
         );
 
-        //Response Creation
-        ProjectResponseDto response =
-                ProjectResponseDto.builder()
-                        .message(message)
-                        .project(projectDto)
-                        .build();
+        ApiResponse<ProjectDto> response =
+                new ApiResponse<>(
+                        message,
+                        HttpStatus.CREATED.value(),
+                        Instant.now(),
+                        projectDto
+                );
+
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
-
     }
 
     @GetMapping("/{projectId}/members")
-    public ResponseEntity<ProjectMemberListResponseDto> getAllMembers(
+    public ResponseEntity<ApiResponse<List<ProjectMemberListDto>>> getAllMembers(
             Authentication authentication,
             @PathVariable Long projectId
     ){
         String email = authentication.getName();
 
-        List<ProjectMemberListDto> members =
+        List<ProjectMemberListDto> data =
                 projectService.getMembers(email, projectId);
 
-        ProjectMemberListResponseDto response = new ProjectMemberListResponseDto(
-                "Successfully fetched Project members",
-                members.size(),
-                members
-        );
+        ApiResponse<List<ProjectMemberListDto>> response =
+                new ApiResponse<>(
+                        "Successfully fetched Project members",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
+                );
 
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{projectId}/members/{userId}/role")
-    public ResponseEntity<?> projectRoleUpdate(
+    public ResponseEntity<ApiResponse<UpdateProjectRoleDto>> projectRoleUpdate(
             Authentication authentication,
             @PathVariable Long projectId,
             @PathVariable Long userId,
             @Valid @RequestBody UpdateProjectRoleRequestDto request
     ){
-        UpdateProjectRoleResponseDto response =
+        UpdateProjectRoleDto data =
                 projectService.projectRoleUpdate(
                         authentication.getName(),
                         projectId,
                         userId,
                         request
                 );
+
+        ApiResponse<UpdateProjectRoleDto> response =
+                new ApiResponse<>(
+                        "Project member role updated successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
+                );
+
         return ResponseEntity.ok(response);
     }
 }

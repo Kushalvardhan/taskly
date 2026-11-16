@@ -2,9 +2,8 @@ package com.taskly.backend.organisation;
 
 import com.taskly.backend.access.OrgAccessService;
 import com.taskly.backend.access.UserAccessService;
-import com.taskly.backend.organisation.dto.CreateOrgRequestDto;
-import com.taskly.backend.organisation.dto.JoinOrgRequestDto;
-import com.taskly.backend.organisation.dto.OrgOperationResult;
+import com.taskly.backend.organisation.dto.*;
+import com.taskly.backend.security.util.JwtUtil;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
 import jakarta.transaction.Transactional;
@@ -17,42 +16,65 @@ public class OrgService {
 
     private final OrgRepository orgRepository;
     private final TasklyUserRepository tasklyUserRepository;
+    private final JwtUtil jwtUtil;
 
     private final UserAccessService userAccessService;
     private final OrgAccessService orgAccessService;
 
     @Transactional
-    public OrgOperationResult registerOrg(CreateOrgRequestDto orgDto, String email) {
-
-        // 1. Find authenticated user
+    public OrgAuthDataDto registerOrg(
+            CreateOrgRequestDto orgDto,
+            String email
+    ) {
         TasklyUser user = userAccessService.getUserByEmail(email);
 
-        // 2. Verify user has no existing organisation
         orgAccessService.verifyUserHasNoOrganisation(user);
 
-        // 3. Create organisation
         Organisation org = new Organisation();
 
         org.setName(orgDto.getName());
         org.setCode(orgDto.getCode());
         org.setCreatedBy(user);
 
-        // 4. Save organisation
         Organisation savedOrg = orgRepository.save(org);
 
-        // 5. Update user's organisation and role
         user.setOrganisation(savedOrg);
-        user.setOrganisationRole(
-                OrganisationRole.ORGANISATION_MANAGER
-        );
+        user.setOrganisationRole(OrganisationRole.ORGANISATION_MANAGER);
 
         TasklyUser updatedUser = tasklyUserRepository.save(user);
 
-        return new OrgOperationResult(savedOrg, updatedUser);
+        // Organisation DTO
+        OrganisationResponseDto organisationData =
+                new OrganisationResponseDto(
+                        savedOrg.getId(),
+                        savedOrg.getName(),
+                        savedOrg.getCode(),
+                        savedOrg.getCreatedBy().getId(),
+                        savedOrg.getCreatedAt(),
+                        savedOrg.getUpdatedAt()
+                );
+
+        // Updated user DTO
+        OrganisationUserDto userData =
+                new OrganisationUserDto(
+                        updatedUser.getId(),
+                        updatedUser.getName(),
+                        updatedUser.getEmail(),
+                        updatedUser.getOrganisationRole().name()
+                );
+
+        // Generate JWT with updated role
+        String newJwtToken = jwtUtil.generateJwtToken(updatedUser);
+
+        return new OrgAuthDataDto(
+                organisationData,
+                userData,
+                newJwtToken
+        );
     }
 
     @Transactional
-    public OrgOperationResult joinOrg(
+    public OrgAuthDataDto joinOrg(
             JoinOrgRequestDto request,
             String email
     ) {
@@ -76,6 +98,33 @@ public class OrgService {
 
         TasklyUser updatedUser = tasklyUserRepository.save(user);
 
-        return new OrgOperationResult(org, updatedUser);
+        // Organisation DTO
+        OrganisationResponseDto organisationData =
+                new OrganisationResponseDto(
+                        org.getId(),
+                        org.getName(),
+                        org.getCode(),
+                        org.getCreatedBy().getId(),
+                        org.getCreatedAt(),
+                        org.getUpdatedAt()
+                );
+
+        // Updated user DTO
+        OrganisationUserDto userData =
+                new OrganisationUserDto(
+                        updatedUser.getId(),
+                        updatedUser.getName(),
+                        updatedUser.getEmail(),
+                        updatedUser.getOrganisationRole().name()
+                );
+
+        // Generate JWT with updated role
+        String newJwtToken = jwtUtil.generateJwtToken(updatedUser);
+
+        return new OrgAuthDataDto(
+                organisationData,
+                userData,
+                newJwtToken
+        );
     }
 }

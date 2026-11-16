@@ -134,7 +134,7 @@ public class ProjectService {
     }
 
     @Transactional
-    public UpdateProjectRoleResponseDto projectRoleUpdate(
+    public UpdateProjectRoleDto projectRoleUpdate(
             String email,
             Long projectId,
             Long userId,
@@ -161,8 +161,7 @@ public class ProjectService {
         ProjectRole requestedRole = request.role();
 
         if (currentRole == requestedRole) {
-            return new UpdateProjectRoleResponseDto(
-                    "User already has the requested project role",
+            return new UpdateProjectRoleDto(
                     projectId,
                     userId,
                     currentRole
@@ -171,8 +170,7 @@ public class ProjectService {
 
         targetMembership.setProjectRole(requestedRole);
 
-        return new UpdateProjectRoleResponseDto(
-                "Project member role updated successfully",
+        return new UpdateProjectRoleDto(
                 projectId,
                 userId,
                 requestedRole
