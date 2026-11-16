@@ -1,5 +1,6 @@
 package com.taskly.backend.task;
 
+import com.taskly.backend.common.ApiResponse;
 import com.taskly.backend.task.dto.*;
 import com.taskly.backend.task.enums.TaskPriority;
 import com.taskly.backend.task.enums.TaskScope;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 @Slf4j
 @RestController
@@ -198,6 +200,36 @@ public class TaskController {
                         projectId,
                         taskId,
                         taskDto
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{projectId}/task/{taskId}/assignees/me/status")
+    public ResponseEntity<ApiResponse<UpdateAssignmentStatusDto>>
+    updateMyAssignmentStatus(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @Valid @RequestBody UpdateAssignmentStatusRequestDto request,
+            Authentication authentication
+    ) {
+
+        String email = authentication.getName();
+
+        UpdateAssignmentStatusDto data =
+                taskService.updateMyAssignmentStatus(
+                        email,
+                        projectId,
+                        taskId,
+                        request
+                );
+
+        ApiResponse<UpdateAssignmentStatusDto> response =
+                new ApiResponse<>(
+                        "Assignment status updated successfully",
+                        HttpStatus.OK.value(),
+                        Instant.now(),
+                        data
                 );
 
         return ResponseEntity.ok(response);

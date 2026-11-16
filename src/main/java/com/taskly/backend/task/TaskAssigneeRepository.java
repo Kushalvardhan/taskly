@@ -2,12 +2,14 @@ package com.taskly.backend.task;
 
 import com.taskly.backend.task.dto.projection.TaskAssigneeDetailsProjection;
 import com.taskly.backend.task.dto.projection.AssigneePreviewProjection;
+import com.taskly.backend.task.enums.TaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public interface TaskAssigneeRepository extends JpaRepository<TaskAssignee, Long> {
@@ -97,5 +99,22 @@ public interface TaskAssigneeRepository extends JpaRepository<TaskAssignee, Long
             @Param("taskId") Long taskId,
             @Param("projectId") Long projectId
     );
+
+    Optional<TaskAssignee> findByTask_IdAndAssignee_Id(
+            Long taskId,
+            Long assigneeId
+    );
+
+    boolean existsByTask_IdAndStatus(
+            Long taskId,
+            TaskStatus status
+    );
+
+    boolean existsByTask_IdAndStatusNot(
+            Long taskId,
+            TaskStatus status
+    );
+
+    boolean existsByTask_Id(Long taskId);
 
 }
