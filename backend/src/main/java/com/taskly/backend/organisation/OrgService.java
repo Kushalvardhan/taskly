@@ -2,6 +2,7 @@ package com.taskly.backend.organisation;
 
 import com.taskly.backend.access.OrgAccessService;
 import com.taskly.backend.access.UserAccessService;
+import com.taskly.backend.exception.FieldValidationException;
 import com.taskly.backend.organisation.dto.*;
 import com.taskly.backend.security.util.JwtUtil;
 import com.taskly.backend.user.TasklyUser;
@@ -29,6 +30,15 @@ public class OrgService {
         TasklyUser user = userAccessService.getUserByEmail(email);
 
         orgAccessService.verifyUserHasNoOrganisation(user);
+
+        // Codes are unique; reject duplicates with a field error instead of
+        // letting the database constraint fail with a 500.
+        if (orgRepository.findByCode(orgDto.getCode()).isPresent()) {
+            throw new FieldValidationException(
+                    "code",
+                    "This code is already in use"
+            );
+        }
 
         Organisation org = new Organisation();
 

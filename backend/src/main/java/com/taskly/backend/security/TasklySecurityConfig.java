@@ -11,12 +11,14 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.password.CompromisedPasswordChecker;
-import org.springframework.security.config.Customizer;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.password.HaveIBeenPwnedRestApiPasswordChecker;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -54,6 +56,11 @@ public class TasklySecurityConfig {
         return http.csrf(csrfConfig -> csrfConfig.disable())
                 .cors(corsConfig -> corsConfig.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> {
+            // Let Spring Boot's error page through so the real status code
+            // (403, 409, 500, ...) reaches the client instead of being
+            // turned into a 401 by denyAll().
+            auth.requestMatchers("/error").permitAll();
+
             publicPaths.forEach(path -> auth.requestMatchers(path).permitAll());
 
             managerPaths.forEach(path -> auth.requestMatchers(path)
@@ -74,8 +81,15 @@ public class TasklySecurityConfig {
             }
         )
         .addFilterBefore(new JwtTokenValidatorFilter(env, publicPaths), BasicAuthenticationFilter.class)
+        // Stateless JWT API: no HTTP session, no form login, no Basic auth.
+        .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .formLogin(flc -> flc.disable())
-        .httpBasic(Customizer.withDefaults())
+        .httpBasic(basic -> basic.disable())
+        // Missing/anonymous authentication -> plain 401 (no WWW-Authenticate
+        // header, so browsers don't show a native login popup).
+        .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
         .build();
     }
 

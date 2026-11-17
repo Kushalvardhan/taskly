@@ -1,75 +1,67 @@
-# React + TypeScript + Vite
+# Taskly – Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite client for the Taskly backend (`../backend`).
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React 19**, **TypeScript**, **Vite**
+- **React Router** (data router, lazy-loaded pages)
+- **TanStack Query** for server state, **Axios** for HTTP
+- **React Hook Form** + **Zod** for forms and validation
+- **Tailwind CSS v4** for styling, **lucide-react** icons, **sonner** toasts
+- **Context API** for the auth session
 
-## React Compiler
+## Getting started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+cp .env.example .env   # first time only
+npm install
+npm run dev            # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+The backend must be running (default `http://localhost:8080`). In development,
+the browser calls `/api/...` on the Vite server, which proxies to the backend
+(`API_PROXY_TARGET` in `.env`), so CORS is not involved.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Variable            | Used by       | Default                 |
+| ------------------- | ------------- | ----------------------- |
+| `VITE_API_BASE_URL` | browser       | `/api`                  |
+| `API_PROXY_TARGET`  | dev server    | `http://localhost:8080` |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Scripts
+
+| Command           | Description                       |
+| ----------------- | --------------------------------- |
+| `npm run dev`     | Start the dev server              |
+| `npm run build`   | Type-check and build to `dist/`   |
+| `npm run preview` | Serve the production build        |
+| `npm run lint`    | Run ESLint                        |
+
+## Project structure
 
 ```
+src/
+├── components/
+│   ├── common/      # Button, Input, FormField, Alert, Badge, Spinner, Logo
+│   └── layout/      # RootLayout, AppLayout, AuthLayout
+├── config/          # Environment config
+├── context/         # AuthProvider + context definition
+├── hooks/           # useAuth, useCurrentUser
+├── pages/           # Route pages (lazy-loaded)
+├── routes/          # Router, route guards, path helpers
+├── services/
+│   ├── api/         # Axios instance, error normalisation, API modules
+│   ├── auth/        # Session token holder, persisted auth storage
+│   └── queryClient.ts
+├── types/           # Backend DTO and enum types
+└── utils/           # cn, jwt, storage, forms, format helpers
+```
+
+## Auth & errors
+
+- The JWT from login (or from creating/joining an organisation) is stored in
+  `localStorage` and sent as `Authorization: Bearer <token>`.
+- Sessions end automatically when the token expires (24h), when the backend
+  rejects the token, or when another tab signs out.
+- Every API failure is normalised into an `AppError`
+  (`status`, `message`, `fieldErrors`) – see `src/services/api/apiError.ts`.
