@@ -29,6 +29,20 @@ public class GlobalExceptionHandler {
         );
     }
 
+    // 400 - Single-field validation error
+    @ExceptionHandler(FieldValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleFieldValidation(
+            FieldValidationException ex,
+            HttpServletRequest request
+    ) {
+        return buildValidationResponse(
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                request.getRequestURI(),
+                Map.of(ex.getField(), ex.getMessage())
+        );
+    }
+
     // 401 - Unauthorized
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiErrorResponse> handleAuthenticationException(
@@ -37,7 +51,7 @@ public class GlobalExceptionHandler {
     ) {
         return buildResponse(
                 HttpStatus.UNAUTHORIZED,
-                "Invalid username or password",
+                "Invalid email or password",
                 request.getRequestURI()
         );
     }

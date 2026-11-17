@@ -1,6 +1,5 @@
 package com.taskly.backend.security;
 
-import com.taskly.backend.exception.ResourceNotFoundException;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
 import org.jspecify.annotations.Nullable;
@@ -37,8 +36,8 @@ public class TasklyUsernamePwdAuthenticationProvider implements AuthenticationPr
         String pwd = credentials.toString();
 
         TasklyUser tasklyUser = tasklyUserRepository.findUserByEmail(username)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User details not found for the user: " + username));
+                .orElseThrow(() -> new BadCredentialsException(
+                        "Invalid email or password"));
 
         List<SimpleGrantedAuthority> authorities =
                 tasklyUser.getOrganisationRole() == null

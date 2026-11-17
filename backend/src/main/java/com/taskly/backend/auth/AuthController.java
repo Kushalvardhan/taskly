@@ -1,7 +1,7 @@
 package com.taskly.backend.auth;
 
 import com.taskly.backend.common.ApiResponse;
-import com.taskly.backend.exception.BadRequestException;
+import com.taskly.backend.exception.FieldValidationException;
 import com.taskly.backend.security.util.JwtUtil;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
@@ -9,6 +9,7 @@ import com.taskly.backend.user.dto.CreateUserRequestDto;
 import com.taskly.backend.user.dto.LoginRequestDto;
 import com.taskly.backend.user.dto.LoginResponseDto;
 import com.taskly.backend.user.dto.UserDto;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
@@ -75,7 +76,6 @@ public class AuthController {
         }
 
         LoginResponseDto loginResponse = new LoginResponseDto(
-                HttpStatus.OK.getReasonPhrase(),
                 userDto,
                 jwtToken
         );
@@ -93,7 +93,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> registerUser(
-            @RequestBody CreateUserRequestDto createUserRequestDto) {
+            @Valid @RequestBody CreateUserRequestDto createUserRequestDto) {
 
         CompromisedPasswordDecision decision =
                 compromisedPasswordChecker.check(
@@ -101,7 +101,10 @@ public class AuthController {
                 );
 
         if (decision.isCompromised()) {
-            throw new BadRequestException("Choose a strong password");
+            throw new FieldValidationException(
+                    "password",
+                    "This password has appeared in a data breach. Choose a different one"
+            );
         }
 
         Optional<TasklyUser> existingUser =
@@ -110,7 +113,10 @@ public class AuthController {
                 );
 
         if (existingUser.isPresent()) {
-            throw new BadRequestException("Email is already registered");
+            throw new FieldValidationException(
+                    "email",
+                    "Email is already registered"
+            );
         }
 
         TasklyUser tasklyUser = new TasklyUser();
