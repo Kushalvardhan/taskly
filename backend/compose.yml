@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18
     container_name: taskly-postgres
 
     environment:
@@ -9,4 +9,10 @@ services:
       POSTGRES_PASSWORD: postgres
 
     ports:
-      - "5432:5432"
+      - "5111:5432"
+
+    volumes:
+      - taskly-postgres-data:/var/lib/postgresql
+
+volumes:
+  taskly-postgres-data:
