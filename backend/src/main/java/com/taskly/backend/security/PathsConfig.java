@@ -11,8 +11,8 @@ public class PathsConfig {
     @Bean(name = "publicPaths")
     public List<String> publicPaths(){
         return List.of(
-                "/auth/register",
-                "/auth/login",
+                "/api/auth/register",
+                "/api/auth/login",
                 "/api/swagger-ui.html",
                 "/swagger-ui/**",
                 "/api/v3/api-docs/**",
