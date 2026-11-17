@@ -1,6 +1,7 @@
 package com.taskly.backend.auth;
 
-import com.taskly.backend.constants.ApplicationConstants;
+import com.taskly.backend.common.ApiResponse;
+import com.taskly.backend.exception.BadRequestException;
 import com.taskly.backend.security.util.JwtUtil;
 import com.taskly.backend.user.TasklyUser;
 import com.taskly.backend.user.TasklyUserRepository;
@@ -13,11 +14,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.password.CompromisedPasswordChecker;
 import org.springframework.security.authentication.password.CompromisedPasswordDecision;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,12 +24,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.time.Instant;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
 public class AuthController {
@@ -43,125 +41,100 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponseDto> apiLogin(
+    public ResponseEntity<ApiResponse<LoginResponseDto>> apiLogin(
             @RequestBody LoginRequestDto loginRequestDto) {
 
-        log.info("STEP 1: Login endpoint reached");
-
-        try {
-            log.info("STEP 2: Calling AuthenticationManager");
-
-            var resultAuthentication =
-                    authenticationManager.authenticate(
-                            new UsernamePasswordAuthenticationToken(
-                                    loginRequestDto.email(),
-                                    loginRequestDto.password()
-                            )
-                    );
-
-            log.info("STEP 3: Authentication successful");
-
-            log.info("STEP 4: Generating JWT");
-
-            String jwtToken =
-                    jwtUtil.generateJwtToken(resultAuthentication);
-
-            log.info("STEP 5: JWT generated successfully");
-
-            var tasklyUser = (TasklyUser) resultAuthentication.getPrincipal();
-
-            assert tasklyUser != null;
-            UserDto userDto = new UserDto();
-
-            BeanUtils.copyProperties(tasklyUser, userDto);
-
-            // Explicitly convert enum to String
-            userDto.setOrganisationRole(
-                    tasklyUser.getOrganisationRole() == null
-                            ? null
-                            : tasklyUser.getOrganisationRole().name()
-            );
-
-            if (tasklyUser.getOrganisation() != null) {
-                userDto.setOrganisationId(
-                        tasklyUser.getOrganisation().getId()
+        var resultAuthentication =
+                authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(
+                                loginRequestDto.email(),
+                                loginRequestDto.password()
+                        )
                 );
-            }
 
-            return ResponseEntity
-                    .status(HttpStatus.OK)
-                    .body(new LoginResponseDto(
-                            HttpStatus.OK.getReasonPhrase(),
-                            userDto,
-                            jwtToken
-                    ));
+        String jwtToken =
+                jwtUtil.generateJwtToken(resultAuthentication);
 
-        } catch (BadCredentialsException ex) {
+        var tasklyUser = (TasklyUser) resultAuthentication.getPrincipal();
 
-            log.warn("LOGIN FAILED: Bad credentials", ex);
+        UserDto userDto = new UserDto();
 
-            return buildErrorResponse(
-                    HttpStatus.UNAUTHORIZED,
-                    "Invalid username or password"
-            );
+        assert tasklyUser != null;
+        BeanUtils.copyProperties(tasklyUser, userDto);
 
-        } catch (AuthenticationException ex) {
+        userDto.setOrganisationRole(
+                tasklyUser.getOrganisationRole() == null
+                        ? null
+                        : tasklyUser.getOrganisationRole().name()
+        );
 
-            log.error("LOGIN FAILED: Authentication exception", ex);
-
-            return buildErrorResponse(
-                    HttpStatus.UNAUTHORIZED,
-                    "Authentication failed"
-            );
-
-        } catch (Exception ex) {
-
-            log.error("LOGIN FAILED: Unexpected exception", ex);
-
-            return buildErrorResponse(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "An unexpected error occurred"
+        if (tasklyUser.getOrganisation() != null) {
+            userDto.setOrganisationId(
+                    tasklyUser.getOrganisation().getId()
             );
         }
+
+        LoginResponseDto loginResponse = new LoginResponseDto(
+                HttpStatus.OK.getReasonPhrase(),
+                userDto,
+                jwtToken
+        );
+
+        ApiResponse<LoginResponseDto> response = new ApiResponse<>(
+                "Login successful",
+                HttpStatus.OK.value(),
+                Instant.now(),
+                loginResponse
+        );
+
+        return ResponseEntity.ok(response);
     }
 
 
-    @PostMapping(value = "/register")
-    public ResponseEntity<?> registerUser(@RequestBody CreateUserRequestDto createUserRequestDto) {
-        CompromisedPasswordDecision decision = compromisedPasswordChecker
-                .check(createUserRequestDto.password());
-        if (decision.isCompromised()) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("password", "Choose a strong password"));
-        }
-        Optional<TasklyUser> existingUser = tasklyUserRepository.findUserByEmail(createUserRequestDto.email());
-        if (existingUser.isPresent()) {
-            Map<String, String> errors = new HashMap<>();
-            TasklyUser tasklyUser = existingUser.get();
-            if (tasklyUser.getEmail().equalsIgnoreCase(createUserRequestDto.email())) {
-                errors.put("email", "Email is already registered");
-            }
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<String>> registerUser(
+            @RequestBody CreateUserRequestDto createUserRequestDto) {
 
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+        CompromisedPasswordDecision decision =
+                compromisedPasswordChecker.check(
+                        createUserRequestDto.password()
+                );
+
+        if (decision.isCompromised()) {
+            throw new BadRequestException("Choose a strong password");
         }
+
+        Optional<TasklyUser> existingUser =
+                tasklyUserRepository.findUserByEmail(
+                        createUserRequestDto.email()
+                );
+
+        if (existingUser.isPresent()) {
+            throw new BadRequestException("Email is already registered");
+        }
+
         TasklyUser tasklyUser = new TasklyUser();
+
         BeanUtils.copyProperties(createUserRequestDto, tasklyUser);
-        tasklyUser.setPasswordHash(passwordEncoder.encode(createUserRequestDto.password()));
+
+        tasklyUser.setPasswordHash(
+                passwordEncoder.encode(createUserRequestDto.password())
+        );
+
         tasklyUser.setOrganisation(null);
         tasklyUser.setOrganisationRole(null);
+
         tasklyUserRepository.save(tasklyUser);
+
+        ApiResponse<String> response = new ApiResponse<>(
+                "User registered successfully",
+                HttpStatus.CREATED.value(),
+                Instant.now(),
+                "User registered successfully"
+        );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body("User registered successfully");
+                .body(response);
     }
-
-    private ResponseEntity<LoginResponseDto> buildErrorResponse(HttpStatus status,
-                                                                String message) {
-        return ResponseEntity
-                .status(status)
-                .body(new LoginResponseDto(message, null, null));
-    }
-
 }
